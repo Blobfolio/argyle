@@ -1,0 +1,24 @@
+[package]
+name = "argyle"
+version = "0.1.0"
+authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+edition = "2018"
+description = "A lightweight, agnostic CLI argument parser."
+license = "WTFPL"
+repository = "https://github.com/Blobfolio/argyle"
+readme = "README.md"
+exclude = [
+	".gitignore",
+	".righteous-sandbox.json",
+	"about.toml",
+	"doc",
+	"justfile",
+	"release",
+]
+
+[dev-dependencies]
+brunch = "0.1.*"
+
+[[bench]]
+name = "fm_keykind"
+harness = false
