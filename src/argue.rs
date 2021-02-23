@@ -66,6 +66,16 @@ const FLAG_HAS_HELP: u8 =         0b0100_0000;
 /// no effect unless [`Argue::FLAG_VERSION`] is set.
 const FLAG_HAS_VERSION: u8 =      0b1000_0000;
 
+/// # Flag: Do Version.
+///
+/// When both `FLAG_VERSION` and `FLAG_HAS_VERSION` are set.
+const FLAG_DO_VERSION: u8 = FLAG_VERSION | FLAG_HAS_VERSION;
+
+/// # Flag: Any Help.
+///
+/// When either `FLAG_HELP` or `FLAG_DYNAMIC_HELP` are set.
+const FLAG_ANY_HELP: u8 = FLAG_HELP | FLAG_DYNAMIC_HELP;
+
 
 
 /// # The size of our keys array.
@@ -301,24 +311,26 @@ impl Argue {
 				return Err(ArgyleError::Empty);
 			}
 		}
-		// There are arguments.
-		else {
-			// Stop for Version?
-			if 0 != self.flags & FLAG_VERSION && 0 != self.flags & FLAG_HAS_VERSION {
-				return Err(ArgyleError::WantsVersion);
-			}
-
-			// Stop for Help?
-			if 0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref().eq(b"help") {
+		// Print version.
+		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
+			return Err(ArgyleError::WantsVersion);
+		}
+		// Check for help.
+		else if 0 != self.flags & FLAG_ANY_HELP {
+			let cmd = self.args[0].as_ref();
+			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
+				// Static help.
 				if 0 != self.flags & FLAG_HELP {
 					return Err(ArgyleError::WantsHelp);
 				}
-				else if 0 != self.flags & FLAG_DYNAMIC_HELP {
-					return Err(ArgyleError::WantsDynamicHelp(
-						Some(self.args.remove(0).into_owned())
-							.filter(|x| ! x.is_empty() && x != b"help" && x[0] != b'-')
-					));
-				}
+
+				// Dynamic help.
+				return Err(ArgyleError::WantsDynamicHelp(
+					if ! cmd.is_empty() && cmd[0] != b'-' && cmd != b"help" {
+						Some(Box::from(cmd))
+					}
+					else { None }
+				));
 			}
 		}
 

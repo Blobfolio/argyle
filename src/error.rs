@@ -29,7 +29,7 @@ pub enum ArgyleError {
 	/// Too many options defined.
 	TooManyKeys,
 	/// Wants subcommand help.
-	WantsDynamicHelp(Option<Vec<u8>>),
+	WantsDynamicHelp(Option<Box<[u8]>>),
 	/// Wants help.
 	WantsHelp,
 	/// Wants version.
