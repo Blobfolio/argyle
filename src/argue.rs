@@ -1082,4 +1082,133 @@ mod tests {
 				.is_ok()
 		);
 	}
+
+	#[test]
+	fn t_help() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-h",
+		];
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		if let Err(ArgyleError::WantsDynamicHelp(e)) = base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP) {
+			let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
+			assert_eq!(e, expected);
+		}
+		else {
+			panic!("Test should have produced an error with Some(Box(hey)).");
+		}
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Again with help flag first.
+		base[0] = b"--help";
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP),
+			Err(ArgyleError::WantsDynamicHelp(None))
+		));
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Same thing without wanting help.
+		base[0] = b"help";
+		base[1] = b"--foo";
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP),
+			Err(ArgyleError::WantsDynamicHelp(None))
+		));
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// One last time with no helpish things.
+		base[0] = b"hey";
+
+		// We should be wanting a static help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// Dynamic help this time.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP)
+				.is_ok()
+		);
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+	}
 }
