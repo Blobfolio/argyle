@@ -19,7 +19,7 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-argyle = "0.1.*"
+argyle = "0.2.*"
 ```
 
 
