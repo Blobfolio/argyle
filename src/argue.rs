@@ -69,12 +69,12 @@ const FLAG_HAS_VERSION: u8 =      0b1000_0000;
 /// # Flag: Do Version.
 ///
 /// When both `FLAG_VERSION` and `FLAG_HAS_VERSION` are set.
-const FLAG_DO_VERSION: u8 = FLAG_VERSION | FLAG_HAS_VERSION;
+const FLAG_DO_VERSION: u8 =       FLAG_VERSION | FLAG_HAS_VERSION;
 
 /// # Flag: Any Help.
 ///
 /// When either `FLAG_HELP` or `FLAG_DYNAMIC_HELP` are set.
-const FLAG_ANY_HELP: u8 = FLAG_HELP | FLAG_DYNAMIC_HELP;
+const FLAG_ANY_HELP: u8 =         FLAG_HELP | FLAG_DYNAMIC_HELP;
 
 
 
