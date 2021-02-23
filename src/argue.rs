@@ -66,6 +66,16 @@ const FLAG_HAS_HELP: u8 =         0b0100_0000;
 /// no effect unless [`Argue::FLAG_VERSION`] is set.
 const FLAG_HAS_VERSION: u8 =      0b1000_0000;
 
+/// # Flag: Do Version.
+///
+/// When both `FLAG_VERSION` and `FLAG_HAS_VERSION` are set.
+const FLAG_DO_VERSION: u8 =       FLAG_VERSION | FLAG_HAS_VERSION;
+
+/// # Flag: Any Help.
+///
+/// When either `FLAG_HELP` or `FLAG_DYNAMIC_HELP` are set.
+const FLAG_ANY_HELP: u8 =         FLAG_HELP | FLAG_DYNAMIC_HELP;
+
 
 
 /// # The size of our keys array.
@@ -301,24 +311,26 @@ impl Argue {
 				return Err(ArgyleError::Empty);
 			}
 		}
-		// There are arguments.
-		else {
-			// Stop for Version?
-			if 0 != self.flags & FLAG_VERSION && 0 != self.flags & FLAG_HAS_VERSION {
-				return Err(ArgyleError::WantsVersion);
-			}
-
-			// Stop for Help?
-			if 0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref().eq(b"help") {
+		// Print version.
+		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
+			return Err(ArgyleError::WantsVersion);
+		}
+		// Check for help.
+		else if 0 != self.flags & FLAG_ANY_HELP {
+			let cmd = self.args[0].as_ref();
+			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
+				// Static help.
 				if 0 != self.flags & FLAG_HELP {
 					return Err(ArgyleError::WantsHelp);
 				}
-				else if 0 != self.flags & FLAG_DYNAMIC_HELP {
-					return Err(ArgyleError::WantsDynamicHelp(
-						Some(self.args.remove(0).into_owned())
-							.filter(|x| ! x.is_empty() && x != b"help" && x[0] != b'-')
-					));
-				}
+
+				// Dynamic help.
+				return Err(ArgyleError::WantsDynamicHelp(
+					if ! cmd.is_empty() && cmd[0] != b'-' && cmd != b"help" {
+						Some(Box::from(cmd))
+					}
+					else { None }
+				));
 			}
 		}
 
@@ -1001,5 +1013,202 @@ mod tests {
 
 		// Something that doesn't exist.
 		assert_eq!(args.option(b"foo"), None);
+	}
+
+	#[test]
+	fn t_version() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-V",
+		];
+
+		// We should be wanting a version.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// Repeat with the long flag.
+		base[1] = b"--version";
+
+		// We should be wanting a version.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// One last time without a version arg present.
+		base[1] = b"--ok";
+
+		// We should be wanting a version.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+	}
+
+	#[test]
+	fn t_help() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-h",
+		];
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		if let Err(ArgyleError::WantsDynamicHelp(e)) = base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP) {
+			let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
+			assert_eq!(e, expected);
+		}
+		else {
+			panic!("Test should have produced an error with Some(Box(hey)).");
+		}
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Again with help flag first.
+		base[0] = b"--help";
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP),
+			Err(ArgyleError::WantsDynamicHelp(None))
+		));
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Same thing without wanting help.
+		base[0] = b"help";
+		base[1] = b"--foo";
+
+		// We should be wanting a static help.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP),
+			Err(ArgyleError::WantsHelp)
+		));
+
+		// Dynamic help this time.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP),
+			Err(ArgyleError::WantsDynamicHelp(None))
+		));
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// One last time with no helpish things.
+		base[0] = b"hey";
+
+		// We should be wanting a static help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// Dynamic help this time.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_DYNAMIC_HELP)
+				.is_ok()
+		);
+
+		// Same thing without wanting help.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
 	}
 }
