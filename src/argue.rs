@@ -1014,4 +1014,72 @@ mod tests {
 		// Something that doesn't exist.
 		assert_eq!(args.option(b"foo"), None);
 	}
+
+	#[test]
+	fn t_version() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-V",
+		];
+
+		// We should be wanting a version.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// Repeat with the long flag.
+		base[1] = b"--version";
+
+		// We should be wanting a version.
+		assert!(matches!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+
+		// One last time without a version arg present.
+		base[1] = b"--ok";
+
+		// We should be wanting a version.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_VERSION)
+				.is_ok()
+		);
+
+		// Same thing without the version flag.
+		assert!(
+			base.iter()
+				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.expect("Failed to build Argue.")
+				.with_flags(FLAG_HELP)
+				.is_ok()
+		);
+	}
 }
