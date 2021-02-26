@@ -234,6 +234,11 @@ impl Argue {
 	/// To construct an `Argue` from arbitrary raw values, use the
 	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
 	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -266,6 +271,11 @@ impl Argue {
 	/// To construct an `Argue` from arbitrary raw values, use the
 	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
 	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -293,6 +303,11 @@ impl Argue {
 	/// where the struct was initialized without calling [`Argue::new`].
 	///
 	/// This will only ever enable flags; it will not disable existing flags.
+	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
 	///
 	/// ## Examples
 	///
@@ -624,6 +639,10 @@ impl Argue {
 	/// first, as that helps the struct determine the boundary between named
 	/// and unnamed values.
 	///
+	/// ## Errors
+	///
+	/// This method will return an error if there is no first argument.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -874,6 +893,7 @@ mod argv {
 	}
 
 	impl Default for Args {
+		#[allow(clippy::cast_sign_loss)] // ARGC is non-negative.
 		/// # Raw Arguments.
 		///
 		/// ## Safety
@@ -922,6 +942,7 @@ mod argv {
 	}
 
 	impl ExactSizeIterator for Args {
+		#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
 		fn len(&self) -> usize {
 			unsafe { self.end.offset_from(self.next) as usize }
 		}
