@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "A lightweight, agnostic CLI argument parser."
