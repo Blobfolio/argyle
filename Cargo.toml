@@ -12,6 +12,7 @@ exclude = [
 	".righteous-sandbox.json",
 	"about.toml",
 	"doc",
+	"examples",
 	"justfile",
 	"release",
 ]

@@ -91,6 +91,19 @@ bench BENCH="":
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 
+# Build and Run Example.
+@debug +ARGS:
+	clear
+	cargo run \
+		-q \
+		--all-features \
+		--release \
+		--example "debug" \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" \
+		-- {{ ARGS }}
+
+
 # Build Docs.
 @doc:
 	# Make sure nightly is installed; this version generates better docs.
