@@ -99,15 +99,11 @@ mod argue;
 mod error;
 mod keykind;
 
-#[doc(hidden)]
-pub mod utility;
-
 pub use argue::{
 	Argue,
 	FLAG_DYNAMIC_HELP,
 	FLAG_HELP,
 	FLAG_REQUIRED,
-	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
 	FLAG_VERSION,
 };
