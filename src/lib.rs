@@ -20,7 +20,7 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-argyle = "0.2.*"
+argyle = "0.3.*"
 ```
 
 
@@ -91,12 +91,7 @@ fn _main() -> Result<(), ArgyleError> {
 #![warn(unused_extern_crates)]
 #![warn(unused_import_braces)]
 
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::map_err_ignore)]
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions)] // This is fine.
 
 
 
@@ -104,15 +99,11 @@ mod argue;
 mod error;
 mod keykind;
 
-#[doc(hidden)]
-pub mod utility;
-
 pub use argue::{
 	Argue,
 	FLAG_DYNAMIC_HELP,
 	FLAG_HELP,
 	FLAG_REQUIRED,
-	FLAG_SEPARATOR,
 	FLAG_SUBCOMMAND,
 	FLAG_VERSION,
 };

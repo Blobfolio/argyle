@@ -5,7 +5,6 @@
 use crate::{
 	ArgyleError,
 	KeyKind,
-	utility,
 };
 use std::{
 	borrow::Cow,
@@ -22,49 +21,43 @@ use std::{
 /// `1`.
 pub const FLAG_REQUIRED: u8 =     0b0000_0001;
 
-/// # Flag: Merge Separator Args.
-///
-/// If the program is called with `--` followed by additional arguments, those
-/// arguments are glued back together into a single entry, replacing that `--`.
-pub const FLAG_SEPARATOR: u8 =    0b0000_0010;
-
 /// # Flag: Expect Subcommand.
 ///
 /// Set this flag to treat the first value as a subcommand rather than a
 /// trailing argument. (This fixes the edge case where the command has zero
 /// dash-prefixed keys.)
-pub const FLAG_SUBCOMMAND: u8 =   0b0000_0100;
+pub const FLAG_SUBCOMMAND: u8 =   0b0000_0010;
 
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsDynamicHelp`] if help args
 /// are present. The subcommand, if any, is included, allowing the caller to
 /// dynamically handle output.
-pub const FLAG_DYNAMIC_HELP: u8 = 0b0000_1000;
+pub const FLAG_DYNAMIC_HELP: u8 = 0b0000_0100;
 
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsHelp`] if help args are
 /// present.
-pub const FLAG_HELP: u8 =         0b0001_0000;
+pub const FLAG_HELP: u8 =         0b0000_1000;
 
 /// # Flag: Check For Version Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsVersion`] if version
 /// args are present.
-pub const FLAG_VERSION: u8 =      0b0010_0000;
+pub const FLAG_VERSION: u8 =      0b0001_0000;
 
 /// # Flag: Has Help.
 ///
 /// This flag is set if either `-h` or `--help` switches are present. It has
 /// no effect unless [`Argue::FLAG_HELP`] is set.
-const FLAG_HAS_HELP: u8 =         0b0100_0000;
+const FLAG_HAS_HELP: u8 =         0b0010_0000;
 
 /// # Flag: Has Version.
 ///
 /// This flag is set if either `-V` or `--version` switches are present. It has
 /// no effect unless [`Argue::FLAG_VERSION`] is set.
-const FLAG_HAS_VERSION: u8 =      0b1000_0000;
+const FLAG_HAS_VERSION: u8 =      0b0100_0000;
 
 /// # Flag: Do Version.
 ///
@@ -146,6 +139,7 @@ const KEY_LEN: usize = 15;
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will ever match.
 /// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
+/// 3. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
 ///
 /// ## Examples
 ///
@@ -234,6 +228,11 @@ impl Argue {
 	/// To construct an `Argue` from arbitrary raw values, use the
 	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
 	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -243,7 +242,7 @@ impl Argue {
 	/// ```
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
 		let iter = argv::Args::default();
-		let len = iter.len();
+		let (len, _) = iter.size_hint();
 		iter
 			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
 			.try_fold(
@@ -266,6 +265,11 @@ impl Argue {
 	/// To construct an `Argue` from arbitrary raw values, use the
 	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
 	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -279,6 +283,7 @@ impl Argue {
 		std::env::args_os()
 			.skip(1)
 			.map(|b| b.as_bytes().to_vec())
+			.take_while(|x| x != b"--")
 			.skip_while(|x|
 				x.is_empty() ||
 				x.iter().all(u8::is_ascii_whitespace)
@@ -293,6 +298,11 @@ impl Argue {
 	/// where the struct was initialized without calling [`Argue::new`].
 	///
 	/// This will only ever enable flags; it will not disable existing flags.
+	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discover of version or help flags).
 	///
 	/// ## Examples
 	///
@@ -318,6 +328,8 @@ impl Argue {
 		// Check for help.
 		else if 0 != self.flags & FLAG_ANY_HELP {
 			let cmd = self.args[0].as_ref();
+
+			// Help is requested!
 			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
 				// Static help.
 				if 0 != self.flags & FLAG_HELP {
@@ -332,11 +344,6 @@ impl Argue {
 					else { None }
 				));
 			}
-		}
-
-		// Handle separator.
-		if 0 != self.flags & FLAG_SEPARATOR {
-			self.parse_separator();
 		}
 
 		Ok(self)
@@ -624,6 +631,10 @@ impl Argue {
 	/// first, as that helps the struct determine the boundary between named
 	/// and unnamed values.
 	///
+	/// ## Errors
+	///
+	/// This method will return an error if there is no first argument.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -796,35 +807,6 @@ impl Argue {
 
 		Ok(self)
 	}
-
-	/// # Parse Separator.
-	///
-	/// This concatenates all arguments trailing a "--" entry into a single
-	/// value, replacing the "--".
-	///
-	/// It is not recursive; if a separator has its own separator, it will
-	/// merely be included in the re-glued string.
-	fn parse_separator(&mut self) {
-		if let Some(idx) = self.args.iter().position(|x| x.as_ref().eq(b"--")) {
-			if idx + 1 < self.args.len() {
-				let mut joined: Vec<u8> = self.args.drain(idx + 1..)
-					.flat_map(|x| {
-						let mut v: Vec<u8> = x.into_owned();
-						utility::esc_arg_b(&mut v);
-						v.push(b' ');
-						v
-					})
-					.collect::<Vec<u8>>();
-				if let Some(b' ') = joined.last() {
-					joined.truncate(joined.len() - 1);
-				}
-				self.args[idx] = Cow::Owned(joined);
-			}
-			else {
-				self.args.truncate(idx);
-			}
-		}
-	}
 }
 
 
@@ -874,6 +856,7 @@ mod argv {
 	}
 
 	impl Default for Args {
+		#[allow(clippy::cast_sign_loss)] // ARGC is non-negative.
 		/// # Raw Arguments.
 		///
 		/// ## Safety
@@ -910,20 +893,22 @@ mod argv {
 			if self.next >= self.end { None }
 			else {
 				let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
-				self.next = unsafe { self.next.add(1) };
-				Some(out)
+				// Short circuit.
+				if out == b"--" {
+					self.next = self.end;
+					None
+				}
+				else {
+					self.next = unsafe { self.next.add(1) };
+					Some(out)
+				}
 			}
 		}
 
+		#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
 		fn size_hint(&self) -> (usize, Option<usize>) {
-			let len = self.len();
+			let len = unsafe { self.end.offset_from(self.next) as usize };
 			(len, Some(len))
-		}
-	}
-
-	impl ExactSizeIterator for Args {
-		fn len(&self) -> usize {
-			unsafe { self.end.offset_from(self.next) as usize }
 		}
 	}
 }
@@ -943,15 +928,10 @@ mod tests {
 			b"-kVal",
 			b"--empty=",
 			b"--key=Val",
-			b"--",
-			b"stuff",
-			b"and things",
 		];
 
 		let mut args = base.iter()
 			.try_fold(Argue::default(), |a, &b| a.push(b))
-			.expect("Failed to build Argue.")
-			.with_flags(FLAG_SEPARATOR)
 			.expect("Failed to build Argue.");
 
 		// Check the overall structure.
@@ -965,7 +945,6 @@ mod tests {
 				Cow::from(vec![]),
 				Cow::from(&b"--key"[..]),
 				Cow::from(&b"Val"[..]),
-				Cow::from(&b"stuff 'and things'"[..]),
 			]
 		);
 
@@ -976,14 +955,9 @@ mod tests {
 		assert!(args.switch2(b"-k", b"--key"));
 		assert_eq!(args.option(b"--key"), Some(&b"Val"[..]));
 		assert_eq!(args.option2(b"-k", b"--key"), Some(&b"Val"[..]));
+		assert!(args.args().is_empty());
 
-		{
-			let a = args.args();
-			assert_eq!(a.len(), 1);
-			assert_eq!(a[0].as_ref(), b"stuff 'and things'");
-		}
-
-		// Let's test a first-position key, and also not doing separator bits.
+		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
 		args = base.iter()
 			.try_fold(Argue::default(), |a, &b| a.push(b))
@@ -1001,9 +975,6 @@ mod tests {
 				Cow::from(vec![]),
 				Cow::from(&b"--key"[..]),
 				Cow::from(&b"Val"[..]),
-				Cow::from(&b"--"[..]),
-				Cow::from(&b"stuff"[..]),
-				Cow::from(&b"and things"[..]),
 			]
 		);
 

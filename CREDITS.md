@@ -13,7 +13,7 @@ License details for project dependencies are listed below.
 
 **Used By:**
 
-* [argyle 0.2.0](https://github.com/Blobfolio/argyle)
+* [argyle 0.3.0](https://github.com/Blobfolio/argyle)
 
 
 ```
