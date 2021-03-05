@@ -26,6 +26,8 @@ pub enum ArgyleError {
 	///
 	/// This has no corresponding error text, but does have its own exit code.
 	Passthru(i32),
+	/// Too many arguments.
+	TooManyArgs,
 	/// Too many options defined.
 	TooManyKeys,
 	/// Wants subcommand help.
@@ -47,6 +49,7 @@ impl AsRef<str> for ArgyleError {
 				| Self::WantsDynamicHelp(_)
 				| Self::WantsHelp
 				| Self::WantsVersion => "",
+			Self::TooManyArgs => "Too many arguments.",
 			Self::TooManyKeys => "Too many keys.",
 		}
 	}

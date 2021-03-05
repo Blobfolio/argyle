@@ -4,6 +4,11 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
+use std::{
+	convert::TryFrom,
+	num::NonZeroU16,
+};
+
 
 
 #[doc(hidden)]
@@ -29,7 +34,7 @@ pub enum KeyKind {
 	Long,
 	/// A long key with a value. The `usize` indicates the position of the `=`
 	/// character. Everything before is the key; everything after the value.
-	LongV(usize),
+	LongV(NonZeroU16),
 }
 
 impl Default for KeyKind {
@@ -38,6 +43,7 @@ impl Default for KeyKind {
 }
 
 impl From<&[u8]> for KeyKind {
+	#[allow(clippy::cast_possible_truncation)] // We're checking it fits.
 	fn from(txt: &[u8]) -> Self {
 		let len: usize = txt.len();
 		if len >= 2 && txt[0] == b'-' {
@@ -46,8 +52,13 @@ impl From<&[u8]> for KeyKind {
 				// Is a long.
 				if len > 2 && txt[2].is_ascii_alphabetic() {
 					return txt.iter()
-						.position(|x| x == &b'=')
-						.map_or(Self::Long, Self::LongV);
+						.position(|&x| x == b'=')
+						.map_or(
+							Self::Long, |x| u16::try_from(x)
+								.map_or(Self::Long, |x| Self::LongV(unsafe {
+									NonZeroU16::new_unchecked(x)
+								}))
+						);
 				}
 			}
 			// Is short.
@@ -78,25 +89,25 @@ mod tests {
 		assert_eq!(KeyKind::from(&b"--0"[..]), KeyKind::None);
 		assert_eq!(KeyKind::from(&b"--yes"[..]), KeyKind::Long);
 		assert_eq!(KeyKind::from(&b"--y-p"[..]), KeyKind::Long);
-		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(5));
-		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(5));
+		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(NonZeroU16::new(5).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(NonZeroU16::new(5).unwrap()));
 
 		// Test in and around the 16-char boundary.
-		assert_eq!(KeyKind::from(&b"--yes_="[..]), KeyKind::LongV(6));
-		assert_eq!(KeyKind::from(&b"--yes__="[..]), KeyKind::LongV(7));
-		assert_eq!(KeyKind::from(&b"--yes___="[..]), KeyKind::LongV(8));
-		assert_eq!(KeyKind::from(&b"--yes____="[..]), KeyKind::LongV(9));
-		assert_eq!(KeyKind::from(&b"--yes_____="[..]), KeyKind::LongV(10));
-		assert_eq!(KeyKind::from(&b"--yes______="[..]), KeyKind::LongV(11));
-		assert_eq!(KeyKind::from(&b"--yes_______="[..]), KeyKind::LongV(12));
-		assert_eq!(KeyKind::from(&b"--yes________="[..]), KeyKind::LongV(13));
-		assert_eq!(KeyKind::from(&b"--yes_________="[..]), KeyKind::LongV(14));
-		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(15));
-		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(16));
-		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(17));
-		assert_eq!(KeyKind::from(&b"--yes____________-="[..]), KeyKind::LongV(18));
-		assert_eq!(KeyKind::from(&b"--yes_____________-="[..]), KeyKind::LongV(19));
-		assert_eq!(KeyKind::from(&b"--yes______________-="[..]), KeyKind::LongV(20));
+		assert_eq!(KeyKind::from(&b"--yes_="[..]), KeyKind::LongV(NonZeroU16::new(6).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes__="[..]), KeyKind::LongV(NonZeroU16::new(7).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes___="[..]), KeyKind::LongV(NonZeroU16::new(8).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes____="[..]), KeyKind::LongV(NonZeroU16::new(9).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes_____="[..]), KeyKind::LongV(NonZeroU16::new(10).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes______="[..]), KeyKind::LongV(NonZeroU16::new(11).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes_______="[..]), KeyKind::LongV(NonZeroU16::new(12).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes________="[..]), KeyKind::LongV(NonZeroU16::new(13).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes_________="[..]), KeyKind::LongV(NonZeroU16::new(14).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(NonZeroU16::new(15).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(NonZeroU16::new(16).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(NonZeroU16::new(17).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes____________-="[..]), KeyKind::LongV(NonZeroU16::new(18).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes_____________-="[..]), KeyKind::LongV(NonZeroU16::new(19).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes______________-="[..]), KeyKind::LongV(NonZeroU16::new(20).unwrap()));
 		assert_eq!(KeyKind::from(&b"--yes_____________"[..]), KeyKind::Long);
 
 		// Does this work?
@@ -106,7 +117,7 @@ mod tests {
 		);
 		assert_eq!(
 			KeyKind::from("--BjörkGuðmunds=dóttir".as_bytes()),
-			KeyKind::LongV(17)
+			KeyKind::LongV(NonZeroU16::new(17).unwrap())
 		);
 	}
 }

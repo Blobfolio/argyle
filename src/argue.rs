@@ -9,6 +9,7 @@ use crate::{
 use std::{
 	borrow::Cow,
 	cell::Cell,
+	convert::TryFrom,
 	ops::Deref,
 };
 
@@ -139,7 +140,9 @@ const KEY_LEN: usize = 15;
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will ever match.
 /// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
-/// 3. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
+/// 3. The total number of keys, values, and arguments may not exceed `u16::MAX`.
+/// 4. A glued `--key=Val` expression cannot be longer than `u16::MAX` bytes.
+/// 5. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
 ///
 /// ## Examples
 ///
@@ -180,7 +183,7 @@ pub struct Argue {
 	///
 	/// The last slot holds the number of keys, hence only 15 total keys are
 	/// supported.
-	keys: [usize; KEY_SIZE],
+	keys: [u16; KEY_SIZE],
 	/// Highest non-arg index.
 	///
 	/// This is used to divide the arguments between named and trailing values.
@@ -191,7 +194,7 @@ pub struct Argue {
 	/// The only way `Argue` knows switches from options is by the method
 	/// invoked by the implementing library. Be sure to request all options
 	/// before asking for trailing arguments.
-	last: Cell<usize>,
+	last: Cell<u16>,
 	/// Flags.
 	flags: u8,
 }
@@ -201,7 +204,7 @@ impl Default for Argue {
 	fn default() -> Self {
 		Self {
 			args: Vec::new(),
-			keys: [0_usize; KEY_SIZE],
+			keys: [0_u16; KEY_SIZE],
 			last: Cell::new(0),
 			flags: 0,
 		}
@@ -485,8 +488,8 @@ impl Argue {
 	/// ```
 	pub fn switch(&self, key: &[u8]) -> bool {
 		self.keys.iter()
-			.take(self.keys[KEY_LEN])
-			.map(|x| &self.args[*x])
+			.take(self.num_keys())
+			.map(|x| &self.args[*x as usize])
 			.any(|x| x.as_ref().eq(key))
 	}
 
@@ -508,8 +511,8 @@ impl Argue {
 	/// ```
 	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
 		self.keys.iter()
-			.take(self.keys[KEY_LEN])
-			.map(|x| &self.args[*x])
+			.take(self.num_keys())
+			.map(|x| &self.args[*x as usize])
 			.any(|x| {
 				let xr = x.as_ref();
 				xr.eq(short) || xr.eq(long)
@@ -537,11 +540,11 @@ impl Argue {
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
-			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args.get(x).map_or(false, |x| x.as_ref().eq(key)))
+			.take(self.num_keys())
+			.position(|&x| self.args.get(x as usize).map_or(false, |x| x.as_ref().eq(key)))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
-				self.args.get(idx).map(|x| {
+				self.args.get(idx as usize).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
 					x.as_ref()
 				})
@@ -564,14 +567,14 @@ impl Argue {
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
-			.take(self.keys[KEY_LEN])
-			.position(|&x| self.args.get(x).map_or(false, |x| {
+			.take(self.num_keys())
+			.position(|&x| self.args.get(x as usize).map_or(false, |x| {
 				let xr = x.as_ref();
 				xr.eq(short) || xr.eq(long)
 			}))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
-				self.args.get(idx).map(|x| {
+				self.args.get(idx as usize).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
 					x.as_ref()
 				})
@@ -656,6 +659,7 @@ impl Argue {
 
 /// ## Internal Helpers.
 impl Argue {
+	#[inline]
 	/// # Arg Index.
 	///
 	/// This is an internal method that returns the index at which the first
@@ -664,28 +668,36 @@ impl Argue {
 	/// Note: the index may be out of range, but won't be used in that case.
 	fn arg_idx(&self) -> usize {
 		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.last.get() + 1 }
+		else { self.last.get() as usize + 1 }
 	}
 
+	#[allow(clippy::cast_possible_truncation)] // The value fits.
 	/// # Insert Key.
 	///
 	/// This will record the key index, unless the maximum number of keys
 	/// has been reached, in which case it will print an error and exit with a
 	/// status code of `1` instead.
-	fn insert_key(&mut self, idx: usize) -> Result<(), ArgyleError> {
-		if self.keys[KEY_LEN] == KEY_LEN {
+	fn insert_key(&mut self, idx: u16) -> Result<(), ArgyleError> {
+		if self.keys[KEY_LEN] == KEY_LEN as u16 {
 			return Err(ArgyleError::TooManyKeys);
 		}
 
-		self.keys[self.keys[KEY_LEN]] = idx;
+		self.keys[self.num_keys()] = idx;
 		self.keys[KEY_LEN] += 1;
 
 		Ok(())
 	}
 
+	#[inline]
+	/// # Num Keys.
+	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
+
 	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 	/// # Parse Keys (Bytes).
 	fn push(mut self, bytes: &'static [u8]) -> Result<Self, ArgyleError> {
+		let idx = u16::try_from(self.args.len())
+			.map_err(|_| ArgyleError::TooManyArgs)?;
+
 		// Find out what we've got!
 		match KeyKind::from(bytes) {
 			// Passthrough.
@@ -697,7 +709,6 @@ impl Argue {
 				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
 				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
 
-				let idx = self.args.len();
 				self.args.push(Cow::Borrowed(bytes));
 				self.insert_key(idx)?;
 				self.last.set(idx);
@@ -707,36 +718,32 @@ impl Argue {
 				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
 				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
 
-				let idx = self.args.len();
 				self.args.push(Cow::Borrowed(bytes));
 				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Split a short key/value pair.
 			KeyKind::ShortV => {
-				let idx = self.args.len();
-
 				self.args.push(Cow::Borrowed(&bytes[0..2]));
 				self.args.push(Cow::Borrowed(&bytes[2..]));
 
 				self.insert_key(idx)?;
-				self.last.set(idx + 1);
+				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
 			},
 			// Split a long key/value pair.
 			KeyKind::LongV(x) => {
-				let idx = self.args.len();
+				let end: usize = x.get() as usize;
+				self.args.push(Cow::Borrowed(&bytes[0..end]));
 
-				self.args.push(Cow::Borrowed(&bytes[0..x]));
-
-				if x + 1 < bytes.len() {
-					self.args.push(Cow::Borrowed(&bytes[x + 1..]));
+				if end + 1 < bytes.len() {
+					self.args.push(Cow::Borrowed(&bytes[end + 1..]));
 				}
 				else {
 					self.args.push(Cow::Owned(Vec::new()));
 				}
 
 				self.insert_key(idx)?;
-				self.last.set(idx + 1);
+				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
 			},
 		}
 
@@ -746,6 +753,9 @@ impl Argue {
 	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
 	/// # Parse Keys (Owned Bytes).
 	fn push(mut self, mut bytes: Vec<u8>) -> Result<Self, ArgyleError> {
+		let idx = u16::try_from(self.args.len())
+			.map_err(|_| ArgyleError::TooManyArgs)?;
+
 		// Find out what we've got!
 		match KeyKind::from(&bytes[..]) {
 			// Passthrough.
@@ -757,7 +767,6 @@ impl Argue {
 				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
 				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
 
-				let idx = self.args.len();
 				self.args.push(Cow::Owned(bytes));
 				self.insert_key(idx)?;
 				self.last.set(idx);
@@ -767,41 +776,37 @@ impl Argue {
 				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
 				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
 
-				let idx = self.args.len();
 				self.args.push(Cow::Owned(bytes));
 				self.insert_key(idx)?;
 				self.last.set(idx);
 			},
 			// Split a short key/value pair.
 			KeyKind::ShortV => {
-				let idx = self.args.len();
-
 				let v2 = bytes.split_off(2);
 				self.args.push(Cow::Owned(bytes));
 				self.args.push(Cow::Owned(v2));
 
 				self.insert_key(idx)?;
-				self.last.set(idx + 1);
+				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
 			},
 			// Split a long key/value pair.
 			KeyKind::LongV(x) => {
-				let idx = self.args.len();
+				let end: usize = x.get() as usize;
 
-
-				if x + 1 < bytes.len() {
-					let v2 = bytes.split_off(x + 1);
-					bytes.truncate(x);
+				if end + 1 < bytes.len() {
+					let v2 = bytes.split_off(end + 1);
+					bytes.truncate(end);
 					self.args.push(Cow::Owned(bytes));
 					self.args.push(Cow::Owned(v2));
 				}
 				else {
-					bytes.truncate(x);
+					bytes.truncate(end);
 					self.args.push(Cow::Owned(bytes));
 					self.args.push(Cow::Owned(Vec::new()));
 				}
 
 				self.insert_key(idx)?;
-				self.last.set(idx + 1);
+				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
 			},
 		}
 
@@ -906,6 +911,7 @@ mod argv {
 		}
 
 		#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
+		#[inline]
 		fn size_hint(&self) -> (usize, Option<usize>) {
 			let len = unsafe { self.end.offset_from(self.next) as usize };
 			(len, Some(len))
