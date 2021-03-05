@@ -5,9 +5,15 @@ This example parses any arbitrary arguments fed to it and displays the results.
 */
 
 use std::ffi::OsStr;
+use std::mem::size_of;
 use std::os::unix::ffi::OsStrExt;
 
+
+
 fn main() {
+	println!("Struct size: {}", size_of::<argyle::Argue>());
+	println!("");
+
 	let args = argyle::Argue::new(argyle::FLAG_REQUIRED);
 	match args {
 		Ok(a) => {
