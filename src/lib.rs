@@ -18,7 +18,7 @@ For simple applications, this agnostic approach can significantly reduce the ove
 
 Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
-```
+```ignore
 [dependencies]
 argyle = "0.3.*"
 ```
@@ -42,15 +42,15 @@ fn main() {
     if let Err(e) = _main() {
         match(e) {
             // A "-V" or "--version" flag was present.
-            Err(ArgyleError::WantsVersion) => {
+            ArgyleError::WantsVersion => {
                 println!("MyApp v{}", env!("CARGO_PKG_VERSION"));
             },
             // A "-h" or "--help" flag was present.
-            Err(ArgyleError::WantsHelp) => {
+            ArgyleError::WantsHelp => {
                 println!("Help stuff goes here...");
             },
             // An actual error!
-            Err(e) => {
+            e => {
                 eprintln!("{}", e);
                 std::process::exit(1);
             },
@@ -66,7 +66,7 @@ fn _main() -> Result<(), ArgyleError> {
     let clean: bool = args.switch(b"--clean");
     let prefix: Option<&[u8]> = args.option2(b"-p", b"--prefix");
 
-    ...
+    Ok(())
 }
 ```
 */

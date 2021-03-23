@@ -154,7 +154,7 @@ const KEY_LEN: usize = 15;
 /// use argyle::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
-/// let args = Argue::new(FLAG_REQUIRED)?;
+/// let args = Argue::new(FLAG_REQUIRED).unwrap();
 ///
 /// // Check to see what's there.
 /// let switch: bool = args.switch(b"-s");
@@ -312,7 +312,7 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::{Argue, FLAG_REQUIRED};
 	///
-	/// let args = Argue::new(0).with_flags(FLAG_REQUIRED);
+	/// let args = Argue::new(0).unwrap().with_flags(FLAG_REQUIRED);
 	/// ```
 	pub fn with_flags(mut self, flags: u8) -> Result<Self, ArgyleError> {
 		self.flags |= flags;
@@ -374,7 +374,7 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0).with_list();
+	/// let mut args = Argue::new(0).unwrap().with_list();
 	/// ```
 	pub fn with_list(mut self) -> Self {
 		use std::{
@@ -421,8 +421,9 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
+	/// use std::borrow::Cow;
 	///
-	/// let args: Vec<Cow<[u8]>> = Argue::new(0).take();
+	/// let args: Vec<Cow<[u8]>> = Argue::new(0).unwrap().take();
 	/// ```
 	pub fn take(self) -> Vec<Cow<'static, [u8]>> { self.args }
 }
@@ -464,7 +465,7 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::{Argue, FLAG_REQUIRED};
 	///
-	/// let args = Argue::new(FLAG_REQUIRED);
+	/// let args = Argue::new(FLAG_REQUIRED).unwrap();
 	///
 	/// // This is actually safe because FLAG_REQUIRED would have errored out
 	/// // if nothing were present.
@@ -483,8 +484,8 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0);
-	/// let switch: bool = args.switch("--my-switch");
+	/// let mut args = Argue::new(0).unwrap();
+	/// let switch: bool = args.switch(b"--my-switch");
 	/// ```
 	pub fn switch(&self, key: &[u8]) -> bool {
 		self.keys.iter()
@@ -506,8 +507,8 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0);
-	/// let switch: bool = args.switch2("-s", "--my-switch");
+	/// let mut args = Argue::new(0).unwrap();
+	/// let switch: bool = args.switch2(b"-s", b"--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
 		self.keys.iter()
@@ -535,8 +536,8 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0);
-	/// let opt: Option<&[u8]> = args.option("--my-opt");
+	/// let mut args = Argue::new(0).unwrap();
+	/// let opt: Option<&[u8]> = args.option(b"--my-opt");
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
@@ -562,8 +563,8 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0);
-	/// let opt: Option<&[u8]> = args.option2("-o", "--my-opt");
+	/// let mut args = Argue::new(0).unwrap();
+	/// let opt: Option<&[u8]> = args.option2(b"-o", b"--my-opt");
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
@@ -597,8 +598,9 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
+	/// use std::borrow::Cow;
 	///
-	/// let mut args = Argue::new(0);
+	/// let mut args = Argue::new(0).unwrap();
 	/// let extras: &[Cow<[u8]>] = args.args();
 	/// ```
 	pub fn args(&self) -> &[Cow<'static, [u8]>] {
@@ -643,8 +645,8 @@ impl Argue {
 	/// ```no_run
 	/// use argyle::Argue;
 	///
-	/// let mut args = Argue::new(0);
-	/// let opt: &[u8] = args.first_arg();
+	/// let mut args = Argue::new(0).unwrap();
+	/// let opt: &[u8] = args.first_arg().unwrap();
 	/// ```
 	pub fn first_arg(&self) -> Result<&[u8], ArgyleError> {
 		let idx = self.arg_idx();
