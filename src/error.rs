@@ -60,6 +60,11 @@ impl fmt::Display for ArgyleError {
 impl ArgyleError {
 	#[must_use]
 	/// # Exit code.
+	///
+	/// This returns the exit code for the error. Non-error errors like help
+	/// and version have a non-error exit code of `0`. [`ArgyleError::Passthru`]
+	/// returns whatever code was defined, while everything else just returns
+	/// `1`.
 	pub const fn exit_code(&self) -> i32 {
 		match self {
 			Self::Passthru(c) => *c,
