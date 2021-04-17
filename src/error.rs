@@ -44,28 +44,8 @@ pub enum ArgyleError {
 }
 
 impl AsRef<str> for ArgyleError {
-	fn as_ref(&self) -> &str {
-		match self {
-			Self::Custom(s) => s,
-			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
-			Self::NoArg => "Missing required trailing argument.",
-			Self::NoSubCmd => "Missing/invalid subcommand.",
-
-			#[cfg(feature = "dynamic-help")]
-			Self::Passthru(_)
-				| Self::WantsDynamicHelp(_)
-				| Self::WantsHelp
-				| Self::WantsVersion => "",
-
-			#[cfg(not(feature = "dynamic-help"))]
-			Self::Passthru(_)
-				| Self::WantsHelp
-				| Self::WantsVersion => "",
-
-			Self::TooManyArgs => "Too many arguments.",
-			Self::TooManyKeys => "Too many keys.",
-		}
-	}
+	#[inline]
+	fn as_ref(&self) -> &str { self.as_str() }
 }
 
 impl Error for ArgyleError {}
@@ -73,7 +53,7 @@ impl Error for ArgyleError {}
 impl fmt::Display for ArgyleError {
 	#[inline]
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_ref())
+		f.write_str(self.as_str())
 	}
 }
 
@@ -93,6 +73,33 @@ impl ArgyleError {
 			Self::WantsHelp | Self::WantsVersion => 0,
 
 			_ => 1,
+		}
+	}
+
+	#[must_use]
+	/// # As Str.
+	///
+	/// Return as a string slice.
+	pub const fn as_str(&self) -> &'static str {
+		match self {
+			Self::Custom(s) => s,
+			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
+			Self::NoArg => "Missing required trailing argument.",
+			Self::NoSubCmd => "Missing/invalid subcommand.",
+
+			#[cfg(feature = "dynamic-help")]
+			Self::Passthru(_)
+				| Self::WantsDynamicHelp(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => "",
+
+			#[cfg(not(feature = "dynamic-help"))]
+			Self::Passthru(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => "",
+
+			Self::TooManyArgs => "Too many arguments.",
+			Self::TooManyKeys => "Too many keys.",
 		}
 	}
 }
