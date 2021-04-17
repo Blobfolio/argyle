@@ -101,11 +101,13 @@ mod keykind;
 
 pub use argue::{
 	Argue,
-	FLAG_DYNAMIC_HELP,
 	FLAG_HELP,
 	FLAG_REQUIRED,
 	FLAG_SUBCOMMAND,
 	FLAG_VERSION,
 };
+
+#[cfg(feature = "dynamic-help")] pub use argue::FLAG_DYNAMIC_HELP;
+
 pub use error::ArgyleError;
 pub use keykind::KeyKind;

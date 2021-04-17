@@ -1,7 +1,8 @@
 /*!
 # Argyle: Errors
 
-This is the obligatory error enum.
+This is the obligatory error enum. It implements `Copy` unless the crate
+feature `dynamic-help` is enabled, in which case it can only be `Clone`.
 */
 
 use std::{
@@ -12,6 +13,7 @@ use std::{
 
 
 #[derive(Debug, Clone)]
+#[cfg_attr(not(feature = "dynamic-help"), derive(Copy))]
 /// # Error Struct.
 pub enum ArgyleError {
 	/// A custom error.
@@ -30,8 +32,11 @@ pub enum ArgyleError {
 	TooManyArgs,
 	/// Too many options defined.
 	TooManyKeys,
+
+	#[cfg(feature = "dynamic-help")]
 	/// Wants subcommand help.
 	WantsDynamicHelp(Option<Box<[u8]>>),
+
 	/// Wants help.
 	WantsHelp,
 	/// Wants version.
@@ -45,10 +50,18 @@ impl AsRef<str> for ArgyleError {
 			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
 			Self::NoArg => "Missing required trailing argument.",
 			Self::NoSubCmd => "Missing/invalid subcommand.",
+
+			#[cfg(feature = "dynamic-help")]
 			Self::Passthru(_)
 				| Self::WantsDynamicHelp(_)
 				| Self::WantsHelp
 				| Self::WantsVersion => "",
+
+			#[cfg(not(feature = "dynamic-help"))]
+			Self::Passthru(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => "",
+
 			Self::TooManyArgs => "Too many arguments.",
 			Self::TooManyKeys => "Too many keys.",
 		}
@@ -70,9 +83,15 @@ impl ArgyleError {
 	pub const fn exit_code(&self) -> i32 {
 		match self {
 			Self::Passthru(c) => *c,
+
+			#[cfg(feature = "dynamic-help")]
 			Self::WantsDynamicHelp(_)
 				| Self::WantsHelp
 				| Self::WantsVersion => 0,
+
+			#[cfg(not(feature = "dynamic-help"))]
+			Self::WantsHelp | Self::WantsVersion => 0,
+
 			_ => 1,
 		}
 	}
