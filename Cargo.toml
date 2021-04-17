@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "A lightweight, agnostic CLI argument parser."
@@ -10,6 +10,7 @@ readme = "README.md"
 exclude = [
 	".gitignore",
 	".righteous-sandbox.json",
+	".travis.yml",
 	"about.toml",
 	"doc",
 	"examples",
@@ -18,6 +19,7 @@ exclude = [
 ]
 
 [package.metadata.docs.rs]
+features = [ "dynamic-help" ]
 default-target = "x86_64-unknown-linux-gnu"
 
 [dev-dependencies]
@@ -26,3 +28,7 @@ brunch = "0.1.*"
 [[bench]]
 name = "fm_keykind"
 harness = false
+
+[features]
+default = []
+dynamic-help = [] # Enables ArgyleError::WantsDynamicHelp variant.

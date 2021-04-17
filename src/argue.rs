@@ -29,6 +29,7 @@ pub const FLAG_REQUIRED: u8 =     0b0000_0001;
 /// dash-prefixed keys.)
 pub const FLAG_SUBCOMMAND: u8 =   0b0000_0010;
 
+#[cfg(feature = "dynamic-help")]
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsDynamicHelp`] if help args
@@ -65,10 +66,17 @@ const FLAG_HAS_VERSION: u8 =      0b0100_0000;
 /// When both `FLAG_VERSION` and `FLAG_HAS_VERSION` are set.
 const FLAG_DO_VERSION: u8 =       FLAG_VERSION | FLAG_HAS_VERSION;
 
+#[cfg(feature = "dynamic-help")]
 /// # Flag: Any Help.
 ///
 /// When either `FLAG_HELP` or `FLAG_DYNAMIC_HELP` are set.
 const FLAG_ANY_HELP: u8 =         FLAG_HELP | FLAG_DYNAMIC_HELP;
+
+#[cfg(not(feature = "dynamic-help"))]
+/// # Flag: Any Help.
+///
+/// When either `FLAG_HELP` or `FLAG_DYNAMIC_HELP` are set.
+const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 
 
 
@@ -234,7 +242,7 @@ impl Argue {
 	/// ## Errors
 	///
 	/// This method will bubble any processing errors or aborts (like the
-	/// discover of version or help flags).
+	/// discovery of version or help flags).
 	///
 	/// ## Examples
 	///
@@ -271,7 +279,7 @@ impl Argue {
 	/// ## Errors
 	///
 	/// This method will bubble any processing errors or aborts (like the
-	/// discover of version or help flags).
+	/// discovery of version or help flags).
 	///
 	/// ## Examples
 	///
@@ -305,7 +313,7 @@ impl Argue {
 	/// ## Errors
 	///
 	/// This method will bubble any processing errors or aborts (like the
-	/// discover of version or help flags).
+	/// discovery of version or help flags).
 	///
 	/// ## Examples
 	///
@@ -329,18 +337,28 @@ impl Argue {
 			return Err(ArgyleError::WantsVersion);
 		}
 		// Check for help.
-		else if 0 != self.flags & FLAG_ANY_HELP {
+		else if let Some(e) = self.help_flag() {
+			return Err(e);
+		}
+
+		Ok(self)
+	}
+
+	#[cfg(feature = "dynamic-help")]
+	/// # Handle Help.
+	fn help_flag(&self) -> Option<ArgyleError> {
+		if 0 != self.flags & FLAG_ANY_HELP {
 			let cmd = self.args[0].as_ref();
 
 			// Help is requested!
 			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
 				// Static help.
 				if 0 != self.flags & FLAG_HELP {
-					return Err(ArgyleError::WantsHelp);
+					return Some(ArgyleError::WantsHelp);
 				}
 
 				// Dynamic help.
-				return Err(ArgyleError::WantsDynamicHelp(
+				return Some(ArgyleError::WantsDynamicHelp(
 					if ! cmd.is_empty() && cmd[0] != b'-' && cmd != b"help" {
 						Some(Box::from(cmd))
 					}
@@ -349,7 +367,21 @@ impl Argue {
 			}
 		}
 
-		Ok(self)
+		None
+	}
+
+	#[cfg(not(feature = "dynamic-help"))]
+	#[inline]
+	/// # Handle Help.
+	fn help_flag(&self) -> Option<ArgyleError> {
+		if
+			0 != self.flags & FLAG_ANY_HELP &&
+			(0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref() == b"help")
+		{
+				return Some(ArgyleError::WantsHelp);
+		}
+
+		None
 	}
 
 	#[must_use]
@@ -1078,6 +1110,7 @@ mod tests {
 			Err(ArgyleError::WantsHelp)
 		));
 
+		#[cfg(feature = "dynamic-help")]
 		// Dynamic help this time.
 		if let Err(ArgyleError::WantsDynamicHelp(e)) = base.iter()
 				.try_fold(Argue::default(), |a, &b| a.push(b))
@@ -1111,6 +1144,7 @@ mod tests {
 			Err(ArgyleError::WantsHelp)
 		));
 
+		#[cfg(feature = "dynamic-help")]
 		// Dynamic help this time.
 		assert!(matches!(
 			base.iter()
@@ -1142,6 +1176,7 @@ mod tests {
 			Err(ArgyleError::WantsHelp)
 		));
 
+		#[cfg(feature = "dynamic-help")]
 		// Dynamic help this time.
 		assert!(matches!(
 			base.iter()
@@ -1172,6 +1207,7 @@ mod tests {
 				.is_ok()
 		);
 
+		#[cfg(feature = "dynamic-help")]
 		// Dynamic help this time.
 		assert!(
 			base.iter()
