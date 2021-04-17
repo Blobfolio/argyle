@@ -44,7 +44,48 @@ pub enum ArgyleError {
 }
 
 impl AsRef<str> for ArgyleError {
-	fn as_ref(&self) -> &str {
+	#[inline]
+	fn as_ref(&self) -> &str { self.as_str() }
+}
+
+impl Error for ArgyleError {}
+
+impl fmt::Display for ArgyleError {
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(self.as_str())
+	}
+}
+
+impl ArgyleError {
+	#[must_use]
+	/// # Exit code.
+	///
+	/// This returns the exit code for the error. Non-error errors like help
+	/// and version have a non-error exit code of `0`. [`ArgyleError::Passthru`]
+	/// returns whatever code was defined, while everything else just returns
+	/// `1`.
+	pub const fn exit_code(&self) -> i32 {
+		match self {
+			Self::Passthru(c) => *c,
+
+			#[cfg(feature = "dynamic-help")]
+			Self::WantsDynamicHelp(_)
+				| Self::WantsHelp
+				| Self::WantsVersion => 0,
+
+			#[cfg(not(feature = "dynamic-help"))]
+			Self::WantsHelp | Self::WantsVersion => 0,
+
+			_ => 1,
+		}
+	}
+
+	#[must_use]
+	/// # As Str.
+	///
+	/// Return as a string slice.
+	pub const fn as_str(&self) -> &'static str {
 		match self {
 			Self::Custom(s) => s,
 			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
@@ -64,35 +105,6 @@ impl AsRef<str> for ArgyleError {
 
 			Self::TooManyArgs => "Too many arguments.",
 			Self::TooManyKeys => "Too many keys.",
-		}
-	}
-}
-
-impl Error for ArgyleError {}
-
-impl fmt::Display for ArgyleError {
-	#[inline]
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_ref())
-	}
-}
-
-impl ArgyleError {
-	#[must_use]
-	/// # Exit code.
-	pub const fn exit_code(&self) -> i32 {
-		match self {
-			Self::Passthru(c) => *c,
-
-			#[cfg(feature = "dynamic-help")]
-			Self::WantsDynamicHelp(_)
-				| Self::WantsHelp
-				| Self::WantsVersion => 0,
-
-			#[cfg(not(feature = "dynamic-help"))]
-			Self::WantsHelp | Self::WantsVersion => 0,
-
-			_ => 1,
 		}
 	}
 }
