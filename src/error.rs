@@ -12,7 +12,7 @@ use std::{
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(not(feature = "dynamic-help"), derive(Copy))]
 /// # Error Struct.
 pub enum ArgyleError {
