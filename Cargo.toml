@@ -8,9 +8,9 @@ license = "WTFPL"
 repository = "https://github.com/Blobfolio/argyle"
 readme = "README.md"
 exclude = [
+	".github",
 	".gitignore",
 	".righteous-sandbox.json",
-	".travis.yml",
 	"about.toml",
 	"doc",
 	"examples",

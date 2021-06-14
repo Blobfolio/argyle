@@ -1,5 +1,0 @@
-language: rust
-os:
-  - linux
-rust:
-  - stable

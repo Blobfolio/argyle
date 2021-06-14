@@ -2,6 +2,7 @@
 
 [![Documentation](https://docs.rs/argyle/badge.svg)](https://docs.rs/argyle/)
 [![crates.io](https://img.shields.io/crates/v/argyle.svg)](https://crates.io/crates/argyle)
+[![Build Status](https://github.com/Blobfolio/argyle/workflows/Build/badge.svg)](https://github.com/Blobfolio/argyle/actions)
 
 This crate contains an agnostic CLI argument parser called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments into a consistent state so the implementor can query them as needed.
 
