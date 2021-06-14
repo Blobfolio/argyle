@@ -77,6 +77,7 @@ impl From<&[u8]> for KeyKind {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use brunch as _;
 
 	#[test]
 	fn t_from() {
