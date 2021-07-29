@@ -425,7 +425,7 @@ impl Argue {
 				.for_each(|line| {
 					let bytes = line.trim().as_bytes();
 					if ! bytes.is_empty() {
-						self.args.push(Cow::Owned(bytes.to_vec()))
+						self.args.push(Cow::Owned(bytes.to_vec()));
 					}
 				});
 		}
