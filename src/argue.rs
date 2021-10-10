@@ -9,7 +9,6 @@ use crate::{
 use std::{
 	borrow::Cow,
 	cell::Cell,
-	convert::TryFrom,
 	ops::Deref,
 };
 
@@ -236,9 +235,6 @@ impl Argue {
 	/// stock [`std::env::args`] iterator. The first (command path) part is
 	/// automatically excluded.
 	///
-	/// To construct an `Argue` from arbitrary raw values, use the
-	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
-	///
 	/// ## Errors
 	///
 	/// This method will bubble any processing errors or aborts (like the
@@ -272,9 +268,6 @@ impl Argue {
 	///
 	/// Populate arguments from `std::env::args()`. The first (command path)
 	/// part is automatically excluded.
-	///
-	/// To construct an `Argue` from arbitrary raw values, use the
-	/// `Argue::from_iter()` method (via the [`std::iter::FromIterator`] trait).
 	///
 	/// ## Errors
 	///
