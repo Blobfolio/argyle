@@ -1,8 +1,9 @@
 [package]
 name = "argyle"
-version = "0.4.2"
+version = "0.5.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "A lightweight, agnostic CLI argument parser."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/argyle"
@@ -21,9 +22,10 @@ exclude = [
 [package.metadata.docs.rs]
 features = [ "dynamic-help" ]
 default-target = "x86_64-unknown-linux-gnu"
+targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dev-dependencies]
-brunch = "0.1.*"
+brunch = "0.2.*"
 
 [[bench]]
 name = "fm_keykind"
