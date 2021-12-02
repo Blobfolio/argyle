@@ -6,15 +6,13 @@ License details for project dependencies are listed below.
 
 * Do What The F*ck You Want To Public License (1)
 
-
 ## Complete Licenses:
 
 ### Do What The F*ck You Want To Public License
 
 **Used By:**
 
-* [argyle 0.4.2](https://github.com/Blobfolio/argyle)
-
+* [argyle 0.5.1](https://github.com/Blobfolio/argyle)
 
 ```
 DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
@@ -32,6 +30,5 @@ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 0. You just DO WHAT THE FUCK YOU WANT TO.
 
 ```
-
 
 
