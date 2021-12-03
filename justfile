@@ -21,7 +21,6 @@ pkg_name    := "Argyle"
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
-release_dir := justfile_directory() + "/release"
 
 rustflags   := "-C link-arg=-s"
 
@@ -82,12 +81,7 @@ bench BENCH="":
 
 # Generate CREDITS.
 @credits:
-	# Update CREDITS.html.
-	cargo about \
-		generate \
-		-m "{{ justfile_directory() }}/Cargo.toml" \
-		"{{ release_dir }}/credits/about.hbs" > "{{ justfile_directory() }}/CREDITS.md"
-
+	cargo bashman --no-bash --no-man
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 

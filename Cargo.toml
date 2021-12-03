@@ -24,6 +24,12 @@ features = [ "dynamic-help" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
+[package.metadata.bashman]
+name = "Argyle"
+bash-dir = "./"
+man-dir = "./"
+credits-dir = "./"
+
 [dev-dependencies]
 brunch = "0.2.*"
 
