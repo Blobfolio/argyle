@@ -40,7 +40,6 @@ impl Default for KeyKind {
 }
 
 impl From<&[u8]> for KeyKind {
-	#[allow(clippy::cast_possible_truncation)] // We're checking it fits.
 	fn from(txt: &[u8]) -> Self {
 		let len: usize = txt.len();
 		if len >= 2 && txt[0] == b'-' {
