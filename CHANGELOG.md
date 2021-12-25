@@ -1,12 +1,24 @@
 # Changelog
 
 
+## [0.5.2](https://github.com/Blobfolio/argyle/releases/tag/v0.5.2) - 2021-12-25
+
+### New
+
+* `Argue::bitflags`
+
+### Changed
+
+* Misc code cleanup.
+
+
+
 ## [0.5.1](https://github.com/Blobfolio/argyle/releases/tag/v0.5.1) - 2021-12-02
 
 ### Changed
 
-- Docs.
-- Fix justfile `credits` task.
+* Docs.
+* Fix justfile `credits` task.
 
 
 
@@ -14,8 +26,8 @@
 
 ### Added
 
-- This changelog! Haha.
+* This changelog! Haha.
 
 ### Changed
 
-- Use Rust edition 2021.
+* Use Rust edition 2021.
