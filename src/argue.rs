@@ -9,7 +9,10 @@ use crate::{
 use std::{
 	borrow::Cow,
 	cell::Cell,
-	ops::Deref,
+	ops::{
+		BitOr,
+		Deref,
+	},
 };
 
 
@@ -543,6 +546,43 @@ impl Argue {
 				let xr = x.as_ref();
 				xr.eq(short) || xr.eq(long)
 			})
+	}
+
+	#[must_use]
+	/// # Switches As Bitflags.
+	///
+	/// If you have a lot of switches that directly correspond to bitflags, you
+	/// can pass them all to this method and receive the appropriate combined
+	/// flag value back.
+	///
+	/// This does not conflict with [`Argue::switch`]; if some of your flags
+	/// require special handling you can mix-and-match calls.
+	///
+	/// Note: the default value of `N` is used as a starting point. For `u8`,
+	/// `u16`, etc., that's just `0`, but if using a custom type, make sure its
+	/// default state is the equivalent of "no flags".
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// let flags: u8 = args.bitflags([
+	///     (&b"-o"[..], 0b0000_0001),
+	///     (&b"-t"[..], 0b0000_0010),
+	/// ]);
+	/// ```
+	pub fn bitflags<'a, N, I>(&self, pairs: I) -> N
+	where
+		N: BitOr<Output = N> + Default,
+		I: IntoIterator<Item=(&'a [u8], N)>
+	{
+		pairs.into_iter()
+			.fold(N::default(), |flags, (switch, flag)|
+				if self.switch(switch) { flags | flag }
+				else { flags }
+			)
 	}
 
 	/// # Option.
@@ -1218,5 +1258,41 @@ mod tests {
 				.with_flags(FLAG_VERSION)
 				.is_ok()
 		);
+	}
+
+	#[test]
+	fn t_bitflags() {
+		const FLAG_EMPTY: u8 =    0b0000_0001;
+		const FLAG_HELLO: u8 =    0b0000_0010;
+		const FLAG_K: u8 =        0b0000_0100;
+		const FLAG_ONE_MORE: u8 = 0b0000_1000;
+		const FLAG_OTHER: u8 =    0b0001_0000;
+
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-k",
+			b"--empty",
+			b"--key=Val",
+			b"--hello",
+			b"--one-more",
+		];
+
+		let args = base.iter()
+			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.expect("Failed to build Argue.");
+
+		let flags: u8 = args.bitflags([
+			(&b"-k"[..], FLAG_K),
+			(&b"--empty"[..], FLAG_EMPTY),
+			(&b"--hello"[..], FLAG_HELLO),
+			(&b"--one-more"[..], FLAG_ONE_MORE),
+			(&b"--other"[..], FLAG_OTHER),
+		]);
+
+		assert_eq!(flags & FLAG_K, FLAG_K);
+		assert_eq!(flags & FLAG_EMPTY, FLAG_EMPTY);
+		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
+		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
+		assert_eq!(flags & FLAG_OTHER, 0);
 	}
 }
