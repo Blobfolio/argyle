@@ -107,7 +107,7 @@ const KEY_LEN: usize = 15;
 /// to the implementor. For non-Musl Linux systems, this is almost entirely
 /// non-allocating as CLI arguments map directly back to the `CStr` pointers.
 /// For other systems, `Argue` falls back to [`std::env::args_os`], so requires
-///  a bit more allocation.
+/// a bit more allocation.
 ///
 /// For simple applications, this agnostic approach can significantly reduce
 /// the overhead of processing CLI arguments, but because handling is left to
