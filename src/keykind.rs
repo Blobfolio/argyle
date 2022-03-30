@@ -29,7 +29,7 @@ pub enum KeyKind {
 	ShortV,
 	/// A long key.
 	Long,
-	/// A long key with a value. The `usize` indicates the position of the `=`
+	/// A long key with a value. The number indicates the position of the `=`
 	/// character. Everything before is the key; everything after the value.
 	LongV(NonZeroU16),
 }
@@ -51,6 +51,9 @@ impl From<&[u8]> for KeyKind {
 						.position(|&x| x == b'=')
 						.map_or(
 							Self::Long, |x| u16::try_from(x)
+								// Safety: Argue verifies the length is less
+								// than u16::MAX, and this method verifies
+								// non-empty.
 								.map_or(Self::Long, |x| Self::LongV(unsafe {
 									NonZeroU16::new_unchecked(x)
 								}))

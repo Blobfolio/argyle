@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [0.5.3](https://github.com/Blobfolio/argyle/releases/tag/v0.5.3) - 2022-03-29
+
+### New
+
+* `Argue::args_os`
+* `Argue::arg_os`
+* `Argue::first_arg_os`
+* `Argue::option_os`
+* `Argue::option2_os`
+
+
+
 ## [0.5.2](https://github.com/Blobfolio/argyle/releases/tag/v0.5.2) - 2021-12-25
 
 ### New
