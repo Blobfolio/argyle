@@ -288,8 +288,6 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		use std::os::unix::ffi::OsStrExt;
-
 		std::env::args_os()
 			.skip(1)
 			.map(|b| b.as_bytes().to_vec())
