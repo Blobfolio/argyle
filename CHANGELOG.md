@@ -8,6 +8,8 @@
 * `Argue::args_os`
 * `Argue::arg_os`
 * `Argue::first_arg_os`
+* `Argue::option_os`
+* `Argue::option2_os`
 
 
 

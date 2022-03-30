@@ -728,6 +728,24 @@ impl Argue {
 /// # `OsStr` Methods.
 impl Argue {
 	#[must_use]
+	/// # Option as `OsStr`.
+	///
+	/// This works just like [`Argue::option`], except it returns the value as
+	/// an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option_os(&self, key: &[u8]) -> Option<&OsStr> {
+		self.option(key).map(OsStr::from_bytes)
+	}
+
+	#[must_use]
+	/// # Option x2 as `OsStr`.
+	///
+	/// This works just like [`Argue::option2`], except it returns the value as
+	/// an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option2_os(&self, short: &[u8], long: &[u8]) -> Option<&OsStr> {
+		self.option2(short, long).map(OsStr::from_bytes)
+	}
+
+	#[must_use]
 	/// # Trailing Arguments as `OsStr`.
 	///
 	/// This works just like [`Argue::args`], except it returns an iterator
