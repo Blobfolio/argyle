@@ -4,15 +4,18 @@
 
 use crate::{
 	ArgyleError,
+	ArgsOsStr,
 	KeyKind,
 };
 use std::{
 	borrow::Cow,
 	cell::Cell,
+	ffi::OsStr,
 	ops::{
 		BitOr,
 		Deref,
 	},
+	os::unix::ffi::OsStrExt,
 };
 
 
@@ -406,13 +409,11 @@ impl Argue {
 	/// ```
 	pub fn with_list(mut self) -> Self {
 		use std::{
-			ffi::OsStr,
 			fs::File,
 			io::{
 				BufRead,
 				BufReader,
 			},
-			os::unix::ffi::OsStrExt,
 		};
 
 		if let Some(file) = self.option2(b"-l", b"--list").and_then(|p| File::open(OsStr::from_bytes(p)).ok()) {
@@ -677,7 +678,7 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// # Arg at Index
+	/// # Arg at Index.
 	///
 	/// Pluck the nth trailing argument by index (starting from zero).
 	///
@@ -721,6 +722,39 @@ impl Argue {
 		else {
 			Ok(self.args[idx].as_ref())
 		}
+	}
+}
+
+/// # `OsStr` Methods.
+impl Argue {
+	#[must_use]
+	/// # Trailing Arguments as `OsStr`.
+	///
+	/// This works just like [`Argue::args`], except it returns an iterator
+	/// that yields [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn args_os(&self) -> ArgsOsStr {
+		ArgsOsStr::new(self.args())
+	}
+
+	#[must_use]
+	/// # Arg at Index as `OsStr`.
+	///
+	/// This works just like [`Argue::arg`], except it returns the value as an
+	/// [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn arg_os(&self, idx: usize) -> Option<&OsStr> {
+		self.arg(idx).map(OsStr::from_bytes)
+	}
+
+	/// # First Trailing Argument as `OsStr`
+	///
+	/// This works just like [`Argue::first_arg`] except it returns the value
+	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	///
+	/// ## Errors
+	///
+	/// This method will return an error if there is no first argument.
+	pub fn first_arg_os(&self) -> Result<&OsStr, ArgyleError> {
+		self.first_arg().map(OsStr::from_bytes)
 	}
 }
 

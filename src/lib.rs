@@ -97,6 +97,7 @@ fn _main() -> Result<(), ArgyleError> {
 
 mod argue;
 mod error;
+mod iter;
 mod keykind;
 
 pub use argue::{
@@ -110,4 +111,5 @@ pub use argue::{
 #[cfg(feature = "dynamic-help")] pub use argue::FLAG_DYNAMIC_HELP;
 
 pub use error::ArgyleError;
+pub use iter::ArgsOsStr;
 pub use keykind::KeyKind;
