@@ -414,7 +414,7 @@ impl Argue {
 			},
 		};
 
-		if let Some(file) = self.option2(b"-l", b"--list").and_then(|p| File::open(OsStr::from_bytes(p)).ok()) {
+		if let Some(file) = self.option2_os(b"-l", b"--list").and_then(|p| File::open(p).ok()) {
 			BufReader::new(file).lines()
 				.filter_map(std::result::Result::ok)
 				.for_each(|line| {
