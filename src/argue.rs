@@ -269,10 +269,9 @@ impl Argue {
 	}
 
 	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
-	#[inline]
 	/// # New Instance.
 	///
-	/// Populate arguments from `std::env::args()`. The first (command path)
+	/// Populate arguments from `std::env::args_os()`. The first (command path)
 	/// part is automatically excluded.
 	///
 	/// ## Errors
