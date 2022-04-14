@@ -232,7 +232,7 @@ impl Deref for Argue {
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
-	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 	#[inline]
 	/// # New Instance.
 	///
@@ -268,7 +268,7 @@ impl Argue {
 			.with_flags(flags)
 	}
 
-	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
+	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
 	/// # New Instance.
 	///
 	/// Populate arguments from `std::env::args_os()`. The first (command path)
@@ -808,7 +808,7 @@ impl Argue {
 	/// # Num Keys.
 	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
 
-	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 	/// # Parse Keys (Bytes).
 	fn push(mut self, bytes: &'static [u8]) -> Result<Self, ArgyleError> {
 		let idx = u16::try_from(self.args.len())
@@ -866,7 +866,7 @@ impl Argue {
 		Ok(self)
 	}
 
-	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
+	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
 	/// # Parse Keys (Owned Bytes).
 	fn push(mut self, mut bytes: Vec<u8>) -> Result<Self, ArgyleError> {
 		let idx = u16::try_from(self.args.len())
@@ -932,7 +932,7 @@ impl Argue {
 
 
 
-#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 #[allow(clippy::similar_names)] // Follow convention.
 /// # Linux Specialized Args
 ///
@@ -1042,10 +1042,10 @@ mod tests {
 	use super::*;
 	use brunch as _;
 
-	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 	macro_rules! push { ($lhs:ident, $rhs:ident) => ($lhs.push($rhs)); }
 
-	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
+	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
 	macro_rules! push { ($lhs:ident, $rhs:ident) => ($lhs.push($rhs.to_vec())); }
 
 	#[test]

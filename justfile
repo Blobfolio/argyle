@@ -114,6 +114,21 @@ bench BENCH="":
 	just _fix-chown "{{ doc_dir }}"
 
 
+# Miri tests!
+@miri:
+	# Pre-clean.
+	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
+
+	fyi task "Testing native/default target."
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
+
+	fyi task "Testing mps64 (big endian) target."
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --target mips64-unknown-linux-gnuabi64
+
+	# Post-clean.
+	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
+
+
 # Unit tests!
 @test:
 	clear
