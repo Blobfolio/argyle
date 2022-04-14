@@ -1038,11 +1038,16 @@ mod argv {
 
 
 
-#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use brunch as _;
+
+	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
+	macro_rules! push { ($lhs:ident, $rhs:ident) => ($lhs.push($rhs)); }
+
+	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
+	macro_rules! push { ($lhs:ident, $rhs:ident) => ($lhs.push($rhs.to_vec())); }
 
 	#[test]
 	fn t_parse_args() {
@@ -1054,7 +1059,7 @@ mod tests {
 		];
 
 		let mut args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.try_fold(Argue::default(), |a, &b| push!(a, b))
 			.expect("Failed to build Argue.");
 
 		// Check the overall structure.
@@ -1083,7 +1088,7 @@ mod tests {
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
 		args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.try_fold(Argue::default(), |a, &b| push!(a, b))
 			.expect("Failed to build Argue.");
 
 		// The whole thing again.
@@ -1119,7 +1124,7 @@ mod tests {
 		// We should be wanting a version.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
@@ -1128,7 +1133,7 @@ mod tests {
 		// Same thing without the version flag.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP)
 				.is_ok()
@@ -1140,7 +1145,7 @@ mod tests {
 		// We should be wanting a version.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
@@ -1149,7 +1154,7 @@ mod tests {
 		// Same thing without the version flag.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP)
 				.is_ok()
@@ -1161,7 +1166,7 @@ mod tests {
 		// We should be wanting a version.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION)
 				.is_ok()
@@ -1170,7 +1175,7 @@ mod tests {
 		// Same thing without the version flag.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP)
 				.is_ok()
@@ -1187,7 +1192,7 @@ mod tests {
 		// We should be wanting a static help.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1196,7 +1201,7 @@ mod tests {
 		#[cfg(feature = "dynamic-help")]
 		// Dynamic help this time.
 		if let Err(ArgyleError::WantsDynamicHelp(e)) = base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_DYNAMIC_HELP) {
 			let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
@@ -1209,7 +1214,7 @@ mod tests {
 		// Same thing without wanting help.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION)
 				.is_ok()
@@ -1221,7 +1226,7 @@ mod tests {
 		// We should be wanting a static help.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1231,7 +1236,7 @@ mod tests {
 		// Dynamic help this time.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_DYNAMIC_HELP),
 			Err(ArgyleError::WantsDynamicHelp(None))
@@ -1240,7 +1245,7 @@ mod tests {
 		// Same thing without wanting help.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION)
 				.is_ok()
@@ -1253,7 +1258,7 @@ mod tests {
 		// We should be wanting a static help.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1263,7 +1268,7 @@ mod tests {
 		// Dynamic help this time.
 		assert!(matches!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_DYNAMIC_HELP),
 			Err(ArgyleError::WantsDynamicHelp(None))
@@ -1272,7 +1277,7 @@ mod tests {
 		// Same thing without wanting help.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION)
 				.is_ok()
@@ -1284,7 +1289,7 @@ mod tests {
 		// We should be wanting a static help.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_HELP)
 				.is_ok()
@@ -1294,7 +1299,7 @@ mod tests {
 		// Dynamic help this time.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_DYNAMIC_HELP)
 				.is_ok()
@@ -1303,7 +1308,7 @@ mod tests {
 		// Same thing without wanting help.
 		assert!(
 			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
+				.try_fold(Argue::default(), |a, &b| push!(a, b))
 				.expect("Failed to build Argue.")
 				.with_flags(FLAG_VERSION)
 				.is_ok()
@@ -1328,7 +1333,7 @@ mod tests {
 		];
 
 		let args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
+			.try_fold(Argue::default(), |a, &b| push!(a, b))
 			.expect("Failed to build Argue.");
 
 		let flags: u8 = args.bitflags([
