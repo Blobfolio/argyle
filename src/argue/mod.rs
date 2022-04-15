@@ -25,9 +25,6 @@ use std::{
 	os::unix::ffi::OsStrExt,
 };
 
-#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
-use std::os::unix::ffi::OsStringExt;
-
 
 
 /// # Flag: Argument(s) Required.
@@ -273,7 +270,7 @@ impl Argue {
 		out.maybe_extend(
 			std::env::args_os()
 			.skip(1)
-			.map(|b| b.into_vec())
+			.map(std::os::unix::ffi::OsStringExt::into_vec)
 			.take_while(|x| x != b"--")
 		)?;
 
