@@ -120,10 +120,10 @@ bench BENCH="":
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 
 	fyi task "Testing native/default target."
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features
 
 	fyi task "Testing mps64 (big endian) target."
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --target mips64-unknown-linux-gnuabi64
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features --target mips64-unknown-linux-gnuabi64
 
 	# Post-clean.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
