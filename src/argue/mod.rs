@@ -386,23 +386,13 @@ impl Argue {
 	/// let mut args = Argue::new(0).unwrap().with_list();
 	/// ```
 	pub fn with_list(mut self) -> Self {
-		use std::{
-			fs::File,
-			io::{
-				BufRead,
-				BufReader,
-			},
-		};
-
-		if let Some(file) = self.option2_os(b"-l", b"--list").and_then(|p| File::open(p).ok()) {
-			BufReader::new(file).lines()
-				.filter_map(std::result::Result::ok)
-				.for_each(|line| {
-					let bytes = line.trim().as_bytes();
-					if ! bytes.is_empty() {
-						self.args.push(Cow::Owned(bytes.to_vec()));
-					}
-				});
+		if let Some(raw) = self.option2_os(b"-l", b"--list").and_then(|p| std::fs::read_to_string(p).ok()) {
+			for line in raw.lines() {
+				let bytes = line.trim().as_bytes();
+				if ! bytes.is_empty() {
+					self.args.push(Cow::Owned(bytes.to_vec()));
+				}
+			}
 		}
 
 		self
@@ -797,6 +787,7 @@ mod tests {
 	use super::*;
 	use brunch as _;
 
+	// This just eliminates a lot of repetitive code.
 	macro_rules! maybe_extend {
 		(reset: $args:ident, $base:ident) => (
 			$args = Argue::default();
