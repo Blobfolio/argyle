@@ -2,11 +2,18 @@
 # Argyle: Argue
 */
 
+#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
+mod argv;
+
+mod maybe;
+
+
+
 use crate::{
 	ArgyleError,
 	ArgsOsStr,
-	KeyKind,
 };
+use maybe::MaybeExtend;
 use std::{
 	borrow::Cow,
 	cell::Cell,
@@ -17,6 +24,9 @@ use std::{
 	},
 	os::unix::ffi::OsStrExt,
 };
+
+#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
+use std::os::unix::ffi::OsStringExt;
 
 
 
@@ -232,14 +242,14 @@ impl Deref for Argue {
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
-	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 	#[inline]
 	/// # New Instance.
 	///
-	/// This populates arguments from the environment using a specialized
-	/// implementation that requires slightly less overhead than using the
-	/// stock [`std::env::args`] iterator. The first (command path) part is
-	/// automatically excluded.
+	/// For non-musl Linux targets, this populates arguments from the
+	/// environment by hooking directly into `argv`. For other Unix systems,
+	/// this simply parses the owned output of [`std::env::args_os`].
+	///
+	/// The first (command path) argument is always excluded.
 	///
 	/// ## Errors
 	///
@@ -254,50 +264,20 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		let iter = argv::Args::default();
-		let (len, _) = iter.size_hint();
-		iter
-			.skip_while(|b| b.is_empty() || b.iter().all(u8::is_ascii_whitespace))
-			.try_fold(
-				Self {
-					args: Vec::with_capacity(len),
-					..Self::default()
-				},
-				Self::push
-			)?
-			.with_flags(flags)
-	}
+		let mut out = Self::default();
 
-	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
-	#[inline]
-	/// # New Instance.
-	///
-	/// Populate arguments from `std::env::args()`. The first (command path)
-	/// part is automatically excluded.
-	///
-	/// ## Errors
-	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::Argue;
-	///
-	/// let args = Argue::new(0);
-	/// ```
-	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		std::env::args_os()
+		#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
+		out.maybe_extend(argv::Args::default())?;
+
+		#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
+		out.maybe_extend(
+			std::env::args_os()
 			.skip(1)
-			.map(|b| b.as_bytes().to_vec())
+			.map(|b| b.into_vec())
 			.take_while(|x| x != b"--")
-			.skip_while(|x|
-				x.is_empty() ||
-				x.iter().all(u8::is_ascii_whitespace)
-			)
-			.try_fold(Self::default(), Self::push)?
-			.with_flags(flags)
+		)?;
+
+		out.with_flags(flags)
 	}
 
 	/// # With Flags.
@@ -406,23 +386,13 @@ impl Argue {
 	/// let mut args = Argue::new(0).unwrap().with_list();
 	/// ```
 	pub fn with_list(mut self) -> Self {
-		use std::{
-			fs::File,
-			io::{
-				BufRead,
-				BufReader,
-			},
-		};
-
-		if let Some(file) = self.option2(b"-l", b"--list").and_then(|p| File::open(OsStr::from_bytes(p)).ok()) {
-			BufReader::new(file).lines()
-				.filter_map(std::result::Result::ok)
-				.for_each(|line| {
-					let bytes = line.trim().as_bytes();
-					if ! bytes.is_empty() {
-						self.args.push(Cow::Owned(bytes.to_vec()));
-					}
-				});
+		if let Some(raw) = self.option2_os(b"-l", b"--list").and_then(|p| std::fs::read_to_string(p).ok()) {
+			for line in raw.lines() {
+				let bytes = line.trim().as_bytes();
+				if ! bytes.is_empty() {
+					self.args.push(Cow::Owned(bytes.to_vec()));
+				}
+			}
 		}
 
 		self
@@ -808,241 +778,25 @@ impl Argue {
 	#[inline]
 	/// # Num Keys.
 	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
-
-	#[cfg(all(target_os = "linux", not(target_env = "musl")))]
-	/// # Parse Keys (Bytes).
-	fn push(mut self, bytes: &'static [u8]) -> Result<Self, ArgyleError> {
-		let idx = u16::try_from(self.args.len())
-			.map_err(|_| ArgyleError::TooManyArgs)?;
-
-		// Find out what we've got!
-		match KeyKind::from(bytes) {
-			// Passthrough.
-			KeyKind::None => {
-				self.args.push(Cow::Borrowed(bytes));
-			},
-			// Record the key and passthrough.
-			KeyKind::Short => {
-				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
-				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
-
-				self.args.push(Cow::Borrowed(bytes));
-				self.insert_key(idx)?;
-				self.last.set(idx);
-			},
-			// Record the key and passthrough.
-			KeyKind::Long => {
-				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
-				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
-
-				self.args.push(Cow::Borrowed(bytes));
-				self.insert_key(idx)?;
-				self.last.set(idx);
-			},
-			// Split a short key/value pair.
-			KeyKind::ShortV => {
-				self.args.push(Cow::Borrowed(&bytes[0..2]));
-				self.args.push(Cow::Borrowed(&bytes[2..]));
-
-				self.insert_key(idx)?;
-				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
-			},
-			// Split a long key/value pair.
-			KeyKind::LongV(x) => {
-				let end: usize = x.get() as usize;
-				self.args.push(Cow::Borrowed(&bytes[0..end]));
-
-				if end + 1 < bytes.len() {
-					self.args.push(Cow::Borrowed(&bytes[end + 1..]));
-				}
-				else {
-					self.args.push(Cow::Owned(Vec::new()));
-				}
-
-				self.insert_key(idx)?;
-				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
-			},
-		}
-
-		Ok(self)
-	}
-
-	#[cfg(any(not(target_os = "linux"), target_env = "musl"))]
-	/// # Parse Keys (Owned Bytes).
-	fn push(mut self, mut bytes: Vec<u8>) -> Result<Self, ArgyleError> {
-		let idx = u16::try_from(self.args.len())
-			.map_err(|_| ArgyleError::TooManyArgs)?;
-
-		// Find out what we've got!
-		match KeyKind::from(&bytes[..]) {
-			// Passthrough.
-			KeyKind::None => {
-				self.args.push(Cow::Owned(bytes));
-			},
-			// Record the key and passthrough.
-			KeyKind::Short => {
-				if bytes[1] == b'V' { self.flags |= FLAG_HAS_VERSION; }
-				else if bytes[1] == b'h' { self.flags |= FLAG_HAS_HELP; }
-
-				self.args.push(Cow::Owned(bytes));
-				self.insert_key(idx)?;
-				self.last.set(idx);
-			},
-			// Record the key and passthrough.
-			KeyKind::Long => {
-				if bytes == b"--version" { self.flags |= FLAG_HAS_VERSION; }
-				else if bytes == b"--help" { self.flags |= FLAG_HAS_HELP; }
-
-				self.args.push(Cow::Owned(bytes));
-				self.insert_key(idx)?;
-				self.last.set(idx);
-			},
-			// Split a short key/value pair.
-			KeyKind::ShortV => {
-				let v2 = bytes.split_off(2);
-				self.args.push(Cow::Owned(bytes));
-				self.args.push(Cow::Owned(v2));
-
-				self.insert_key(idx)?;
-				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
-			},
-			// Split a long key/value pair.
-			KeyKind::LongV(x) => {
-				let end: usize = x.get() as usize;
-
-				if end + 1 < bytes.len() {
-					let v2 = bytes.split_off(end + 1);
-					bytes.truncate(end);
-					self.args.push(Cow::Owned(bytes));
-					self.args.push(Cow::Owned(v2));
-				}
-				else {
-					bytes.truncate(end);
-					self.args.push(Cow::Owned(bytes));
-					self.args.push(Cow::Owned(Vec::new()));
-				}
-
-				self.insert_key(idx)?;
-				self.last.set(idx.checked_add(1).ok_or(ArgyleError::TooManyArgs)?);
-			},
-		}
-
-		Ok(self)
-	}
 }
 
 
 
-#[cfg(all(target_os = "linux", not(target_env = "musl")))]
-#[allow(clippy::similar_names)] // Follow convention.
-/// # Linux Specialized Args
-///
-/// This is a non-allocating version of [`std::env::args_os`] for non-Musl Linux
-/// systems inspired by [`argv`](https://crates.io/crates/argv).
-///
-/// Other targets just use the normal [`std::env::args_os`].
-mod argv {
-	use std::{
-		ffi::CStr,
-		os::raw::{
-			c_char,
-			c_int,
-		},
-	};
-
-	static mut ARGC: c_int = 0;
-	static mut ARGV: *const *const c_char = std::ptr::null();
-
-	#[cfg(target_os = "linux")]
-	#[link_section = ".init_array"]
-	#[used]
-	static CAPTURE: unsafe extern "C" fn(c_int, *const *const c_char) = capture;
-
-	#[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
-	#[allow(dead_code)]
-	unsafe extern "C" fn capture(argc: c_int, argv: *const *const c_char) {
-		ARGC = argc;
-		ARGV = argv;
-	}
-
-	/// # Raw Arguments.
-	///
-	/// This will skip the first (path) argument and return a pointer and
-	/// length if there's anything worth returning.
-	///
-	/// The actual iterables are byte slices in this case, rather than
-	/// (os)strings.
-	pub(super) struct Args {
-		next: *const *const c_char,
-		end: *const *const c_char,
-	}
-
-	impl Default for Args {
-		#[allow(clippy::cast_sign_loss)] // ARGC is non-negative.
-		/// # Raw Arguments.
-		///
-		/// ## Safety
-		///
-		/// This accesses mutable statics — `ARGC` and `ARGV` — but because
-		/// they are only mutated prior to the execution of `main()`, it's
-		/// A-OK.
-		///
-		/// Also worth noting, the operating system is responsible for ensuring
-		/// `ARGV + ARGC` does not overflow, so no worries there either.
-		fn default() -> Self {
-			// We'll only return arguments if there are at least 2 of them.
-			let len: usize = unsafe { ARGC } as usize;
-			if len > 1 {
-				Self {
-					next: unsafe { ARGV.add(1) },
-					end: unsafe { ARGV.add(len) },
-				}
-			}
-			else {
-				let end = unsafe { ARGV.add(len) };
-				Self {
-					next: end,
-					end
-				}
-			}
-		}
-	}
-
-	impl Iterator for Args {
-		type Item = &'static [u8];
-
-		fn next(&mut self) -> Option<Self::Item> {
-			if self.next >= self.end { None }
-			else {
-				let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
-				// Short circuit.
-				if out == b"--" {
-					self.next = self.end;
-					None
-				}
-				else {
-					self.next = unsafe { self.next.add(1) };
-					Some(out)
-				}
-			}
-		}
-
-		#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
-		#[inline]
-		fn size_hint(&self) -> (usize, Option<usize>) {
-			let len = unsafe { self.end.offset_from(self.next) as usize };
-			(len, Some(len))
-		}
-	}
-}
-
-
-
-#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use brunch as _;
+
+	// This just eliminates a lot of repetitive code.
+	macro_rules! maybe_extend {
+		(reset: $args:ident, $base:ident) => (
+			$args = Argue::default();
+			maybe_extend!($args, $base);
+		);
+		($args:ident, $base:ident) => (
+			$args.maybe_extend($base.iter().copied()).expect("Failed to build Argue.");
+		);
+	}
 
 	#[test]
 	fn t_parse_args() {
@@ -1053,9 +807,8 @@ mod tests {
 			b"--key=Val",
 		];
 
-		let mut args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
-			.expect("Failed to build Argue.");
+		let mut args = Argue::default();
+		maybe_extend!(args, base);
 
 		// Check the overall structure.
 		assert_eq!(
@@ -1082,9 +835,7 @@ mod tests {
 
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
-		args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
-			.expect("Failed to build Argue.");
+		maybe_extend!(reset: args, base);
 
 		// The whole thing again.
 		assert_eq!(
@@ -1107,6 +858,12 @@ mod tests {
 
 		// Something that doesn't exist.
 		assert_eq!(args.option(b"foo"), None);
+
+		// One last time: let's make sure extending from a vec works just like
+		// extending from slices.
+		let mut args2 = Argue::default();
+		args2.maybe_extend(base.iter().map(|x| x.to_vec())).expect("Failed to init Argue.");
+		assert_eq!(*args, *args2);
 	}
 
 	#[test]
@@ -1117,64 +874,42 @@ mod tests {
 		];
 
 		// We should be wanting a version.
+		let mut args = Argue::default();
+		maybe_extend!(args, base);
+
 		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION),
+			args.with_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		// Repeat with the long flag.
 		base[1] = b"--version";
 
 		// We should be wanting a version.
+		maybe_extend!(reset: args, base);
 		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION),
+			args.with_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		// One last time without a version arg present.
 		base[1] = b"--ok";
 
 		// We should be wanting a version.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without the version flag.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_HELP).is_ok());
 	}
 
 	#[test]
@@ -1185,129 +920,100 @@ mod tests {
 		];
 
 		// We should be wanting a static help.
+		let mut args = Argue::default();
+		maybe_extend!(args, base);
 		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP),
+			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
 		#[cfg(feature = "dynamic-help")]
-		// Dynamic help this time.
-		if let Err(ArgyleError::WantsDynamicHelp(e)) = base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_DYNAMIC_HELP) {
-			let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
-			assert_eq!(e, expected);
-		}
-		else {
-			panic!("Test should have produced an error with Some(Box(hey)).");
+		{
+			// Dynamic help this time.
+			args = Argue::default();
+			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			match args.with_flags(FLAG_DYNAMIC_HELP) {
+				Err(ArgyleError::WantsDynamicHelp(e)) => {
+					let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
+					assert_eq!(e, expected);
+				},
+				_ => panic!("Test should have produced an error with Some(Box(hey))."),
+			}
 		}
 
 		// Same thing without wanting help.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Again with help flag first.
 		base[0] = b"--help";
 
 		// We should be wanting a static help.
+		maybe_extend!(reset: args, base);
 		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP),
+			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
 		#[cfg(feature = "dynamic-help")]
-		// Dynamic help this time.
-		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_DYNAMIC_HELP),
-			Err(ArgyleError::WantsDynamicHelp(None))
-		));
+		{
+			args = Argue::default();
+			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			// Dynamic help this time.
+			assert!(matches!(
+				args.with_flags(FLAG_DYNAMIC_HELP),
+				Err(ArgyleError::WantsDynamicHelp(None))
+			));
+		}
 
 		// Same thing without wanting help.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without wanting help.
 		base[0] = b"help";
 		base[1] = b"--foo";
 
 		// We should be wanting a static help.
+		maybe_extend!(reset: args, base);
 		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP),
+			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
 		#[cfg(feature = "dynamic-help")]
-		// Dynamic help this time.
-		assert!(matches!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_DYNAMIC_HELP),
-			Err(ArgyleError::WantsDynamicHelp(None))
-		));
+		{
+			args = Argue::default();
+			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			// Dynamic help this time.
+			assert!(matches!(
+				args.with_flags(FLAG_DYNAMIC_HELP),
+				Err(ArgyleError::WantsDynamicHelp(None))
+			));
+		}
 
 		// Same thing without wanting help.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// One last time with no helpish things.
 		base[0] = b"hey";
 
 		// We should be wanting a static help.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_HELP)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		#[cfg(feature = "dynamic-help")]
-		// Dynamic help this time.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_DYNAMIC_HELP)
-				.is_ok()
-		);
+		{
+			// Dynamic help this time.
+			args = Argue::default();
+			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			assert!(args.with_flags(FLAG_DYNAMIC_HELP).is_ok());
+		}
 
 		// Same thing without wanting help.
-		assert!(
-			base.iter()
-				.try_fold(Argue::default(), |a, &b| a.push(b))
-				.expect("Failed to build Argue.")
-				.with_flags(FLAG_VERSION)
-				.is_ok()
-		);
+		maybe_extend!(reset: args, base);
+		assert!(args.with_flags(FLAG_VERSION).is_ok());
 	}
 
 	#[test]
@@ -1327,9 +1033,8 @@ mod tests {
 			b"--one-more",
 		];
 
-		let args = base.iter()
-			.try_fold(Argue::default(), |a, &b| a.push(b))
-			.expect("Failed to build Argue.");
+		let mut args = Argue::default();
+		maybe_extend!(args, base);
 
 		let flags: u8 = args.bitflags([
 			(&b"-k"[..], FLAG_K),

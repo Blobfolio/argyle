@@ -1,6 +1,17 @@
 # Changelog
 
 
+## [0.5.4](https://github.com/Blobfolio/argyle/releases/tag/v0.5.4) - 2022-04-14
+
+### Changed
+
+* Make unit tests target-agnostic
+* Force `std::env::args_os` fallback for `miri`
+* Miscellaneous refactoring and code cleanup
+* Eliminate a few unnecessary allocations
+
+
+
 ## [0.5.3](https://github.com/Blobfolio/argyle/releases/tag/v0.5.3) - 2022-03-29
 
 ### New

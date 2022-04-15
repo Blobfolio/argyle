@@ -22,8 +22,6 @@ cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
 
-rustflags   := "-C link-arg=-s"
-
 
 
 # Bench it!
@@ -32,13 +30,13 @@ bench BENCH="":
 
 	clear
 	if [ -z "{{ BENCH }}" ]; then
-		RUSTFLAGS="{{ rustflags }}" cargo bench \
+		cargo bench \
 			--benches \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
-		RUSTFLAGS="{{ rustflags }}" cargo bench \
+		cargo bench \
 			--bench "{{ BENCH }}" \
 			--all-features \
 			--target x86_64-unknown-linux-gnu \
@@ -50,7 +48,7 @@ bench BENCH="":
 # Check Release!
 @check:
 	# First let's build the Rust bit.
-	RUSTFLAGS="{{ rustflags }}" cargo check \
+	cargo check \
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--all-features \
@@ -72,7 +70,7 @@ bench BENCH="":
 # Clippy.
 @clippy:
 	clear
-	RUSTFLAGS="{{ rustflags }}" cargo clippy \
+	cargo clippy \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \
@@ -114,6 +112,21 @@ bench BENCH="":
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
 	mv "{{ cargo_dir }}/x86_64-unknown-linux-gnu/doc" "{{ justfile_directory() }}"
 	just _fix-chown "{{ doc_dir }}"
+
+
+# Miri tests!
+@miri:
+	# Pre-clean.
+	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
+
+	fyi task "Testing native/default target."
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features
+
+	fyi task "Testing mps64 (big endian) target."
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features --target mips64-unknown-linux-gnuabi64
+
+	# Post-clean.
+	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 
 
 # Unit tests!
