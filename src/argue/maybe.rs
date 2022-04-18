@@ -44,15 +44,14 @@ macro_rules! skip_leading_empty {
 /// We can use this until Rust lands a `TryExtend` trait.
 pub(super) trait MaybeExtend<A> {
 	fn maybe_extend<T>(&mut self, iter: T) -> Result<(), ArgyleError>
-	where T: IntoIterator<Item = A>;
+	where T: Iterator<Item = A> + ExactSizeIterator;
 }
 
 impl MaybeExtend<&'static [u8]> for Argue {
 	fn maybe_extend<T>(&mut self, iter: T) -> Result<(), ArgyleError>
-	where T: IntoIterator<Item = &'static [u8]> {
+	where T: Iterator<Item = &'static [u8]> + ExactSizeIterator {
 		// Reserve some space.
-		let iter = iter.into_iter();
-		let (len, _) = iter.size_hint();
+		let len = iter.len();
 		self.args.reserve(len.checked_next_power_of_two().unwrap_or(len));
 
 		// Loop and add!
@@ -112,10 +111,9 @@ impl MaybeExtend<&'static [u8]> for Argue {
 
 impl MaybeExtend<Vec<u8>> for Argue {
 	fn maybe_extend<T>(&mut self, iter: T) -> Result<(), ArgyleError>
-	where T: IntoIterator<Item = Vec<u8>> {
+	where T: Iterator<Item = Vec<u8>> + ExactSizeIterator {
 		// Reserve some space.
-		let iter = iter.into_iter();
-		let (len, _) = iter.size_hint();
+		let len = iter.len();
 		self.args.reserve(len.checked_next_power_of_two().unwrap_or(len));
 
 		// Loop and add!

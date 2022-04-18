@@ -99,3 +99,10 @@ impl Iterator for Args {
 		(len, Some(len))
 	}
 }
+
+impl ExactSizeIterator for Args {
+	#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
+	fn len(&self) -> usize {
+		unsafe { self.end.offset_from(self.next) as usize }
+	}
+}

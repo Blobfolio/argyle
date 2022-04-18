@@ -271,7 +271,6 @@ impl Argue {
 			std::env::args_os()
 			.skip(1)
 			.map(std::os::unix::ffi::OsStringExt::into_vec)
-			.take_while(|x| x != b"--")
 		)?;
 
 		out.with_flags(flags)
