@@ -742,6 +742,41 @@ impl Argue {
 
 /// ## Internal Helpers.
 impl Argue {
+	#[allow(clippy::cast_possible_truncation)] // We're checking.
+	/// # Add Key.
+	fn add_key(&mut self, key: Cow<'static, [u8]>) -> Result<(), ArgyleError> {
+		let idx = u16::try_from(self.args.len()).map_err(|_| ArgyleError::TooManyArgs)?;
+		self.args.push(key);
+		self.insert_key(idx)?;
+		self.last.set(idx);
+		Ok(())
+	}
+
+	#[allow(clippy::cast_possible_truncation)] // We're checking.
+	/// # Add Key and Value.
+	fn add_key_value(&mut self, key: Cow<'static, [u8]>, val: Cow<'static, [u8]>) -> Result<(), ArgyleError> {
+		let len = self.args.len();
+		if len < 65_535 {
+			self.args.push(key);
+			self.args.push(val);
+
+			let idx = len as u16;
+			self.insert_key(idx)?;
+			self.last.set(idx + 1);
+			Ok(())
+		}
+		else { Err(ArgyleError::TooManyArgs) }
+	}
+
+	/// # Toggle Short Help/Version.
+	///
+	/// This checks to see if the second byte of a short flag is a `V` or `h`,
+	/// and sets the appropriate `FLAG_HAS_*` hint if needed.
+	fn set_short_help_version(&mut self, b: u8) {
+		if b == b'V' { self.flags |= FLAG_HAS_VERSION; }
+		else if b == b'h' { self.flags |= FLAG_HAS_HELP; }
+	}
+
 	#[inline]
 	/// # Arg Index.
 	///
