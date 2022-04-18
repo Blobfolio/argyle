@@ -37,6 +37,10 @@ brunch = "0.2.*"
 name = "fm_keykind"
 harness = false
 
+[[bench]]
+name = "fm_argue"
+harness = false
+
 [features]
 default = []
 dynamic-help = [] # Enables ArgyleError::WantsDynamicHelp variant.
