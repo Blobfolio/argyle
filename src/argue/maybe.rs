@@ -36,6 +36,7 @@ macro_rules! skip_leading_empty {
 			}
 			$any = true;
 		}
+		if $bytes == b"--" { break; }
 	);
 }
 

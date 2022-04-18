@@ -80,15 +80,8 @@ impl Iterator for Args {
 		if self.next >= self.end { None }
 		else {
 			let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
-			// Short circuit.
-			if out == b"--" {
-				self.next = self.end;
-				None
-			}
-			else {
-				self.next = unsafe { self.next.add(1) };
-				Some(out)
-			}
+			self.next = unsafe { self.next.add(1) };
+			Some(out)
 		}
 	}
 
