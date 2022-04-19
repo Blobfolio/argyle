@@ -824,19 +824,11 @@ fn kv_adapter(mut src: Vec<u8>) -> KvIterItem {
 			if end + 1 < src.len() {
 				let b = src.split_off(end + 1);
 				src.truncate(end);
-				(
-					false,
-					Cow::Owned(src),
-					Some(Cow::Owned(b)),
-				)
+				(false, Cow::Owned(src), Some(Cow::Owned(b)))
 			}
 			else {
 				src.truncate(end);
-				(
-					false,
-					Cow::Owned(src),
-					Some(Cow::Borrowed(&[])),
-				)
+				(false, Cow::Owned(src), Some(Cow::Borrowed(&[])))
 			}
 		}
 	}
@@ -865,11 +857,7 @@ fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
 				)
 			}
 			else {
-				(
-					false,
-					Cow::Borrowed(&src[..end]),
-					Some(Cow::Borrowed(&[])),
-				)
+				(false, Cow::Borrowed(&src[..end]), Some(Cow::Borrowed(&[])))
 			}
 		}
 	}
