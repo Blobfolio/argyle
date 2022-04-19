@@ -283,6 +283,11 @@ impl Argue {
 	/// # New Instance (Fallback Version).
 	///
 	/// This simply parses the owned output of [`std::env::args_os`].
+	///
+	/// ## Errors
+	///
+	/// This method will bubble any processing errors or aborts (like the
+	/// discovery of version or help flags).
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
 		use std::os::unix::ffi::OsStringExt;
 
