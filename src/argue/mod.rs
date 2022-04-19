@@ -274,8 +274,9 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		kv_argue(argv::Args::default().map(kv_ref_adapter))?
-			.with_flags(flags)
+		let mut out = kv_argue(argv::Args::default().map(kv_ref_adapter))?;
+		out.check_flags(flags)?;
+		Ok(out)
 	}
 
 	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
@@ -285,14 +286,41 @@ impl Argue {
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
 		use std::os::unix::ffi::OsStringExt;
 
-		kv_argue(
+		let mut out = kv_argue(
 			std::env::args_os()
 				.skip(1)
 				.map(|x| kv_adapter(x.into_vec()))
-		)?
-			.with_flags(flags)
+		)?;
+		out.check_flags(flags)?;
+		Ok(out)
 	}
 
+	/// # Set/Check Flags.
+	///
+	/// This is run after [`Argue::new`] to see what's what.
+	fn check_flags(&mut self, flags: u8) -> Result<(), ArgyleError> {
+		self.flags |= flags;
+
+		// There are no arguments.
+		if self.args.is_empty() {
+			// Required?
+			if 0 != self.flags & FLAG_REQUIRED {
+				return Err(ArgyleError::Empty);
+			}
+		}
+		// Print version.
+		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
+			return Err(ArgyleError::WantsVersion);
+		}
+		// Check for help.
+		else if let Some(e) = self.help_flag() {
+			return Err(e);
+		}
+
+		Ok(())
+	}
+
+	#[deprecated(since = "0.5.5", note = "set flags during Argue::new")]
 	/// # With Flags.
 	///
 	/// This method can be used to set additional parsing options in cases
@@ -1001,13 +1029,13 @@ mod tests {
 		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 
 		assert!(matches!(
-			args.with_flags(FLAG_VERSION),
+			args.check_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_HELP).is_ok());
+		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// Repeat with the long flag.
 		base[1] = b"--version";
@@ -1015,24 +1043,24 @@ mod tests {
 		// We should be wanting a version.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
-			args.with_flags(FLAG_VERSION),
+			args.check_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_HELP).is_ok());
+		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// One last time without a version arg present.
 		base[1] = b"--ok";
 
 		// We should be wanting a version.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_VERSION).is_ok());
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without the version flag.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_HELP).is_ok());
+		assert!(args.check_flags(FLAG_HELP).is_ok());
 	}
 
 	#[test]
@@ -1045,7 +1073,7 @@ mod tests {
 		// We should be wanting a static help.
 		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
-			args.with_flags(FLAG_HELP),
+			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
@@ -1053,7 +1081,7 @@ mod tests {
 		{
 			// Dynamic help this time.
 			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-			match args.with_flags(FLAG_DYNAMIC_HELP) {
+			match args.check_flags(FLAG_DYNAMIC_HELP) {
 				Err(ArgyleError::WantsDynamicHelp(e)) => {
 					let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
 					assert_eq!(e, expected);
@@ -1064,7 +1092,7 @@ mod tests {
 
 		// Same thing without wanting help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_VERSION).is_ok());
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Again with help flag first.
 		base[0] = b"--help";
@@ -1072,7 +1100,7 @@ mod tests {
 		// We should be wanting a static help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
-			args.with_flags(FLAG_HELP),
+			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
@@ -1081,14 +1109,14 @@ mod tests {
 			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			// Dynamic help this time.
 			assert!(matches!(
-				args.with_flags(FLAG_DYNAMIC_HELP),
+				args.check_flags(FLAG_DYNAMIC_HELP),
 				Err(ArgyleError::WantsDynamicHelp(None))
 			));
 		}
 
 		// Same thing without wanting help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_VERSION).is_ok());
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without wanting help.
 		base[0] = b"help";
@@ -1097,7 +1125,7 @@ mod tests {
 		// We should be wanting a static help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
-			args.with_flags(FLAG_HELP),
+			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
 		));
 
@@ -1106,32 +1134,32 @@ mod tests {
 			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			// Dynamic help this time.
 			assert!(matches!(
-				args.with_flags(FLAG_DYNAMIC_HELP),
+				args.check_flags(FLAG_DYNAMIC_HELP),
 				Err(ArgyleError::WantsDynamicHelp(None))
 			));
 		}
 
 		// Same thing without wanting help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_VERSION).is_ok());
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// One last time with no helpish things.
 		base[0] = b"hey";
 
 		// We should be wanting a static help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_HELP).is_ok());
+		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
 			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-			assert!(args.with_flags(FLAG_DYNAMIC_HELP).is_ok());
+			assert!(args.check_flags(FLAG_DYNAMIC_HELP).is_ok());
 		}
 
 		// Same thing without wanting help.
 		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert!(args.with_flags(FLAG_VERSION).is_ok());
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
 	}
 
 	#[test]

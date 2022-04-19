@@ -5,8 +5,12 @@
 
 ### Changed
 
-* Refactor `Argue` construction (~20% performance improvement)
-* Trailing arguments are now explicitly capped to `u16::MAX` for consistency (previously only keys needed to sit within the `u16` range)
+* Improve performance of `Argue::new` by ~20%
+* Trailing arguments are now explicitly capped to `u16::MAX` entries for consistency (previously only keys needed to sit within the `u16` range)
+
+### Deprecated
+
+* `Argue::with_flags` (set flags during `Argue::new` instead)
 
 
 
