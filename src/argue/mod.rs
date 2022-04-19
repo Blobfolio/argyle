@@ -1172,4 +1172,33 @@ mod tests {
 		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
 		assert_eq!(flags & FLAG_OTHER, 0);
 	}
+
+	#[test]
+	#[cfg_attr(miri, ignore)]
+	fn t_overflow() {
+		// Let's start with one-too-many elements.
+		let mut nope: Vec<&[u8]> = (0..65536_u32).into_iter()
+			.map(|_x| b"hi".as_slice())
+			.collect();
+
+		// We can't exceed u16::MAX elements.
+		assert!(Argue::try_from_kv(nope.iter().copied().map(kv_ref_adapter)).is_err());
+
+		// This is an awful lot of arguments, but should fit now!
+		nope.pop();
+		assert_eq!(nope.len(), 65535);
+		assert!(Argue::try_from_kv(nope.iter().copied().map(kv_ref_adapter)).is_ok());
+
+		// We also can't have more than 15 keys.
+		nope.truncate(0);
+		for _ in 0..16 {
+			nope.push(b"-h");
+		}
+		assert!(Argue::try_from_kv(nope.iter().copied().map(kv_ref_adapter)).is_err());
+
+		// But if we remove one it should work.
+		nope.pop();
+		assert_eq!(nope.len(), 15);
+		assert!(Argue::try_from_kv(nope.iter().copied().map(kv_ref_adapter)).is_ok());
+	}
 }
