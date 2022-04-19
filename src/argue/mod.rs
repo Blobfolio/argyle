@@ -5,15 +5,13 @@
 #[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 mod argv;
 
-mod maybe;
-
 
 
 use crate::{
 	ArgyleError,
 	ArgsOsStr,
+	KeyKind,
 };
-use maybe::MaybeExtend;
 use std::{
 	borrow::Cow,
 	cell::Cell,
@@ -24,6 +22,18 @@ use std::{
 	},
 	os::unix::ffi::OsStrExt,
 };
+
+
+
+/// # Key/Value Iterator Item.
+///
+/// The bool indicates whether or not this was a miscellaneous argument (i.e.
+/// not a key).
+///
+/// The middle value is either said argument or the key.
+///
+/// The third item is the attached value, if any.
+type KvIterItem = (bool, Cow<'static, [u8]>, Option<Cow<'static, [u8]>>);
 
 
 
@@ -239,12 +249,15 @@ impl Deref for Argue {
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
-	#[inline]
+	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 	/// # New Instance.
 	///
 	/// For non-musl Linux targets, this populates arguments from the
-	/// environment by hooking directly into `argv`. For other Unix systems,
-	/// this simply parses the owned output of [`std::env::args_os`].
+	/// environment by hooking directly into `argv`, avoiding unnecessary
+	/// allocations.
+	///
+	/// For other Unix systems, this simply parses the owned output of
+	/// [`std::env::args_os`].
 	///
 	/// The first (command path) argument is always excluded.
 	///
@@ -261,19 +274,93 @@ impl Argue {
 	/// let args = Argue::new(0);
 	/// ```
 	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		let mut out = Self::default();
+		Self::try_from_kv(argv::Args::default().map(kv_ref_adapter))?
+			.with_flags(flags)
+	}
 
-		#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
-		out.maybe_extend(argv::Args::default())?;
+	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
+	/// # New Instance (Fallback Version).
+	///
+	/// This simply parses the owned output of [`std::env::args_os`].
+	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
+		use std::os::unix::ffi::OsStringExt;
 
-		#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
-		out.maybe_extend(
+		Self::try_from_kv(
 			std::env::args_os()
-			.skip(1)
-			.map(std::os::unix::ffi::OsStringExt::into_vec)
-		)?;
+				.skip(1)
+				.map(|x| kv_adapter(x.into_vec()))
+		)?
+			.with_flags(flags)
+	}
 
-		out.with_flags(flags)
+	/// # Try From `KvIter`
+	///
+	/// This is the workhorse behind [`Argue::new`]; it does all the actual
+	/// processing and returns a fresh instance if it all worked out.
+	fn try_from_kv<T>(src: T) -> Result<Self, ArgyleError>
+	where T: Iterator<Item = KvIterItem> {
+		let mut args: Vec<Cow<[u8]>> = Vec::with_capacity(KEY_SIZE);
+		let mut keys = [0_u16; KEY_SIZE];
+		let mut last = 0_u16;
+		let mut idx = 0_u16;
+		let mut any = false;
+		let mut flags = 0_u8;
+
+		for (standalone, key, value) in src {
+			// Skip leading empties.
+			if ! any {
+				if key.is_empty() || key.iter().all(u8::is_ascii_whitespace) {
+					continue;
+				}
+				any = true;
+			}
+
+			// How many spots will this take up?
+			let inc: u16 =
+				if value.is_some() { 2 }
+				else if key.as_ref() == b"--" { break; }
+				else { 1 };
+
+			// Make sure we fit.
+			if u16::MAX - inc < idx {
+				return Err(ArgyleError::TooManyArgs);
+			}
+
+			// Just an arg?
+			if standalone { idx += inc; }
+			// Do key stuff!
+			else {
+				if value.is_none() {
+					match key.as_ref() {
+						b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
+						b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
+						_ => {},
+					}
+				}
+
+				let num_keys = keys[KEY_LEN] as usize;
+				if num_keys == KEY_LEN {
+					return Err(ArgyleError::TooManyKeys);
+				}
+
+				keys[num_keys] = idx;
+				keys[KEY_LEN] += 1;
+
+				idx += inc;
+				last = idx - 1;
+			}
+
+			// Push the things.
+			args.push(key);
+			if let Some(v) = value { args.push(v); }
+		}
+
+		Ok(Self {
+			args,
+			keys,
+			last: Cell::new(last),
+			flags,
+		})
 	}
 
 	/// # With Flags.
@@ -742,41 +829,6 @@ impl Argue {
 
 /// ## Internal Helpers.
 impl Argue {
-	#[allow(clippy::cast_possible_truncation)] // We're checking.
-	/// # Add Key.
-	fn add_key(&mut self, key: Cow<'static, [u8]>) -> Result<(), ArgyleError> {
-		let idx = u16::try_from(self.args.len()).map_err(|_| ArgyleError::TooManyArgs)?;
-		self.args.push(key);
-		self.insert_key(idx)?;
-		self.last.set(idx);
-		Ok(())
-	}
-
-	#[allow(clippy::cast_possible_truncation)] // We're checking.
-	/// # Add Key and Value.
-	fn add_key_value(&mut self, key: Cow<'static, [u8]>, val: Cow<'static, [u8]>) -> Result<(), ArgyleError> {
-		let len = self.args.len();
-		if len < 65_535 {
-			self.args.push(key);
-			self.args.push(val);
-
-			let idx = len as u16;
-			self.insert_key(idx)?;
-			self.last.set(idx + 1);
-			Ok(())
-		}
-		else { Err(ArgyleError::TooManyArgs) }
-	}
-
-	/// # Toggle Short Help/Version.
-	///
-	/// This checks to see if the second byte of a short flag is a `V` or `h`,
-	/// and sets the appropriate `FLAG_HAS_*` hint if needed.
-	fn set_short_help_version(&mut self, b: u8) {
-		if b == b'V' { self.flags |= FLAG_HAS_VERSION; }
-		else if b == b'h' { self.flags |= FLAG_HAS_HELP; }
-	}
-
 	#[inline]
 	/// # Arg Index.
 	///
@@ -789,26 +841,86 @@ impl Argue {
 		else { self.last.get() as usize + 1 }
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // The value fits.
-	/// # Insert Key.
-	///
-	/// This will record the key index, unless the maximum number of keys
-	/// has been reached, in which case it will print an error and exit with a
-	/// status code of `1` instead.
-	fn insert_key(&mut self, idx: u16) -> Result<(), ArgyleError> {
-		if self.keys[KEY_LEN] == KEY_LEN as u16 {
-			return Err(ArgyleError::TooManyKeys);
-		}
-
-		self.keys[self.num_keys()] = idx;
-		self.keys[KEY_LEN] += 1;
-
-		Ok(())
-	}
-
 	#[inline]
 	/// # Num Keys.
 	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
+}
+
+
+
+#[cfg(any(test, miri, not(target_os = "linux"), target_env = "musl"))]
+/// # Key/Value Iterator Adapter.
+///
+/// This parses and Cows owned arguments so we can handle them consistently.
+fn kv_adapter(mut src: Vec<u8>) -> KvIterItem {
+	match KeyKind::from(src.as_slice()) {
+		KeyKind::None => (true, Cow::Owned(src), None),
+		KeyKind::Short | KeyKind::Long => (
+			false,
+			Cow::Owned(src),
+			None
+		),
+		KeyKind::ShortV => {
+			let b = src.split_off(2);
+			(false, Cow::Owned(src), Some(Cow::Owned(b)))
+		},
+		KeyKind::LongV(x) => {
+			let end = x.get() as usize;
+			if end + 1 < src.len() {
+				let b = src.split_off(end + 1);
+				src.truncate(end);
+				(
+					false,
+					Cow::Owned(src),
+					Some(Cow::Owned(b)),
+				)
+			}
+			else {
+				src.truncate(end);
+				(
+					false,
+					Cow::Owned(src),
+					Some(Cow::Borrowed(&[])),
+				)
+			}
+		}
+	}
+}
+
+/// # Key/Value Iterator Adapter.
+///
+/// This parses and Cows referenced arguments so we can handle them
+/// consistently.
+fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
+	match KeyKind::from(src) {
+		KeyKind::None => (true, Cow::Borrowed(src), None),
+		KeyKind::Short | KeyKind::Long => (
+			false,
+			Cow::Borrowed(src),
+			None
+		),
+		KeyKind::ShortV => {
+			let (a, b) = src.split_at(2);
+			(false, Cow::Borrowed(a), Some(Cow::Borrowed(b)))
+		},
+		KeyKind::LongV(x) => {
+			let end = x.get() as usize;
+			if end + 1 < src.len() {
+				(
+					false,
+					Cow::Borrowed(&src[..end]),
+					Some(Cow::Borrowed(&src[end + 1..])),
+				)
+			}
+			else {
+				(
+					false,
+					Cow::Borrowed(&src[..end]),
+					Some(Cow::Borrowed(&[])),
+				)
+			}
+		}
+	}
 }
 
 
@@ -817,17 +929,6 @@ impl Argue {
 mod tests {
 	use super::*;
 	use brunch as _;
-
-	// This just eliminates a lot of repetitive code.
-	macro_rules! maybe_extend {
-		(reset: $args:ident, $base:ident) => (
-			$args = Argue::default();
-			maybe_extend!($args, $base);
-		);
-		($args:ident, $base:ident) => (
-			$args.maybe_extend($base.iter().copied()).expect("Failed to build Argue.");
-		);
-	}
 
 	#[test]
 	fn t_parse_args() {
@@ -838,8 +939,7 @@ mod tests {
 			b"--key=Val",
 		];
 
-		let mut args = Argue::default();
-		maybe_extend!(args, base);
+		let mut args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 
 		// Check the overall structure.
 		assert_eq!(
@@ -866,7 +966,7 @@ mod tests {
 
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 
 		// The whole thing again.
 		assert_eq!(
@@ -892,8 +992,7 @@ mod tests {
 
 		// One last time: let's make sure extending from a vec works just like
 		// extending from slices.
-		let mut args2 = Argue::default();
-		args2.maybe_extend(base.iter().map(|x| x.to_vec())).expect("Failed to init Argue.");
+		let args2 = Argue::try_from_kv(base.iter().map(|x| kv_adapter(x.to_vec()))).unwrap();
 		assert_eq!(*args, *args2);
 	}
 
@@ -905,8 +1004,7 @@ mod tests {
 		];
 
 		// We should be wanting a version.
-		let mut args = Argue::default();
-		maybe_extend!(args, base);
+		let mut args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 
 		assert!(matches!(
 			args.with_flags(FLAG_VERSION),
@@ -914,32 +1012,32 @@ mod tests {
 		));
 
 		// Same thing without the version flag.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		// Repeat with the long flag.
 		base[1] = b"--version";
 
 		// We should be wanting a version.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
 			args.with_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		// One last time without a version arg present.
 		base[1] = b"--ok";
 
 		// We should be wanting a version.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without the version flag.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_HELP).is_ok());
 	}
 
@@ -951,8 +1049,7 @@ mod tests {
 		];
 
 		// We should be wanting a static help.
-		let mut args = Argue::default();
-		maybe_extend!(args, base);
+		let mut args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
 			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -961,8 +1058,7 @@ mod tests {
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = Argue::default();
-			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			match args.with_flags(FLAG_DYNAMIC_HELP) {
 				Err(ArgyleError::WantsDynamicHelp(e)) => {
 					let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
@@ -973,14 +1069,14 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Again with help flag first.
 		base[0] = b"--help";
 
 		// We should be wanting a static help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
 			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -988,8 +1084,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = Argue::default();
-			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.with_flags(FLAG_DYNAMIC_HELP),
@@ -998,7 +1093,7 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without wanting help.
@@ -1006,7 +1101,7 @@ mod tests {
 		base[1] = b"--foo";
 
 		// We should be wanting a static help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(matches!(
 			args.with_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1014,8 +1109,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = Argue::default();
-			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.with_flags(FLAG_DYNAMIC_HELP),
@@ -1024,26 +1118,25 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_VERSION).is_ok());
 
 		// One last time with no helpish things.
 		base[0] = b"hey";
 
 		// We should be wanting a static help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_HELP).is_ok());
 
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = Argue::default();
-			args.maybe_extend(base.iter().copied()).expect("Failed to build Argue.");
+			args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 			assert!(args.with_flags(FLAG_DYNAMIC_HELP).is_ok());
 		}
 
 		// Same thing without wanting help.
-		maybe_extend!(reset: args, base);
+		args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		assert!(args.with_flags(FLAG_VERSION).is_ok());
 	}
 
@@ -1064,9 +1157,7 @@ mod tests {
 			b"--one-more",
 		];
 
-		let mut args = Argue::default();
-		maybe_extend!(args, base);
-
+		let args = Argue::try_from_kv(base.iter().copied().map(kv_ref_adapter)).unwrap();
 		let flags: u8 = args.bitflags([
 			(&b"-k"[..], FLAG_K),
 			(&b"--empty"[..], FLAG_EMPTY),
