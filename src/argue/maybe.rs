@@ -15,7 +15,7 @@ use super::{
 
 
 
-/// # Helper: Skip leading whitespace-only entries, and end on --.
+/// # Helper: Skip leading "empty" entries, and stop on --.
 macro_rules! maybe_skip {
 	($any:ident, $bytes:ident) => (
 		if ! $any {
@@ -39,10 +39,6 @@ pub(super) trait MaybeExtend<A> {
 impl MaybeExtend<&'static [u8]> for Argue {
 	fn maybe_extend<T>(&mut self, iter: T) -> Result<(), ArgyleError>
 	where T: Iterator<Item = &'static [u8]> + ExactSizeIterator {
-		// Reserve some space.
-		let len = iter.len();
-		self.args.reserve(len.checked_next_power_of_two().unwrap_or(len));
-
 		// Loop and add!
 		let mut any = false;
 		for bytes in iter {
@@ -90,10 +86,6 @@ impl MaybeExtend<&'static [u8]> for Argue {
 impl MaybeExtend<Vec<u8>> for Argue {
 	fn maybe_extend<T>(&mut self, iter: T) -> Result<(), ArgyleError>
 	where T: Iterator<Item = Vec<u8>> + ExactSizeIterator {
-		// Reserve some space.
-		let len = iter.len();
-		self.args.reserve(len.checked_next_power_of_two().unwrap_or(len));
-
 		// Loop and add!
 		let mut any = false;
 		for mut bytes in iter {

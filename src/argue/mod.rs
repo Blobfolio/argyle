@@ -223,7 +223,7 @@ impl Default for Argue {
 	#[inline]
 	fn default() -> Self {
 		Self {
-			args: Vec::new(),
+			args: Vec::with_capacity(KEY_SIZE),
 			keys: [0_u16; KEY_SIZE],
 			last: Cell::new(0),
 			flags: 0,
