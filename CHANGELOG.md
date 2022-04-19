@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [0.5.5](https://github.com/Blobfolio/argyle/releases/tag/v0.5.5) - TBD
+## [0.5.5](https://github.com/Blobfolio/argyle/releases/tag/v0.5.5) - 2022-04-19
 
 ### Changed
 
