@@ -44,3 +44,8 @@ harness = false
 [features]
 default = []
 dynamic-help = [] # Enables ArgyleError::WantsDynamicHelp variant.
+
+[profile.bench]
+lto = false
+codegen-units = 1
+opt-level = 3
