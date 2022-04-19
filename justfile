@@ -84,7 +84,7 @@ bench BENCH="":
 
 
 # Build and Run Example.
-@debug +ARGS:
+@demo +ARGS:
 	clear
 	cargo run \
 		-q \
