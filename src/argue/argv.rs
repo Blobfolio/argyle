@@ -80,15 +80,8 @@ impl Iterator for Args {
 		if self.next >= self.end { None }
 		else {
 			let out = unsafe { CStr::from_ptr(*self.next).to_bytes() };
-			// Short circuit.
-			if out == b"--" {
-				self.next = self.end;
-				None
-			}
-			else {
-				self.next = unsafe { self.next.add(1) };
-				Some(out)
-			}
+			self.next = unsafe { self.next.add(1) };
+			Some(out)
 		}
 	}
 
@@ -97,5 +90,12 @@ impl Iterator for Args {
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let len = unsafe { self.end.offset_from(self.next) as usize };
 		(len, Some(len))
+	}
+}
+
+impl ExactSizeIterator for Args {
+	#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
+	fn len(&self) -> usize {
+		unsafe { self.end.offset_from(self.next) as usize }
 	}
 }

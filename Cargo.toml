@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.5.4"
+version = "0.5.5"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.56"
@@ -37,6 +37,15 @@ brunch = "0.2.*"
 name = "fm_keykind"
 harness = false
 
+[[bench]]
+name = "fm_argue"
+harness = false
+
 [features]
 default = []
 dynamic-help = [] # Enables ArgyleError::WantsDynamicHelp variant.
+
+[profile.bench]
+lto = false
+codegen-units = 1
+opt-level = 3

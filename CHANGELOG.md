@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [0.5.5](https://github.com/Blobfolio/argyle/releases/tag/v0.5.5) - TBD
+
+### Changed
+
+* Improve performance of `Argue::new` by ~20%
+* Trailing arguments are now explicitly capped to `u16::MAX` entries for consistency (previously only keys needed to sit within the `u16` range)
+
+### Deprecated
+
+* `Argue::with_flags` (set flags during `Argue::new` instead)
+
+
+
 ## [0.5.4](https://github.com/Blobfolio/argyle/releases/tag/v0.5.4) - 2022-04-14
 
 ### Changed
