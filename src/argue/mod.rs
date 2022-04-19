@@ -1000,6 +1000,20 @@ mod tests {
 		// Something that doesn't exist.
 		assert_eq!(args.option(b"foo"), None);
 
+		// Let's see what trailing args look like when there are none.
+		assert!(args.first_arg().is_err());
+		assert_eq!(args.arg(0), None);
+
+		// Let's also make sure the trailing arguments work too.
+		let trailing: &[&[u8]] = &[b"Hello", b"World"];
+		base.extend_from_slice(trailing);
+		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		assert_eq!(args.first_arg(), Ok(&b"Hello"[..]));
+		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
+		assert_eq!(args.arg(1), Some(&b"World"[..]));
+		assert_eq!(args.arg(2), None);
+		assert_eq!(args.args(), trailing);
+
 		// One last time: let's make sure extending from a vec works just like
 		// extending from slices.
 		let args2 = kv_argue(base.iter().map(|x| kv_adapter(x.to_vec()))).unwrap();
