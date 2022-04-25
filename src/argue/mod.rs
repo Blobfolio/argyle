@@ -492,6 +492,7 @@ impl Argue {
 	/// ```
 	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Cow::as_ref) }
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	#[inline]
 	/// # First Entry.
