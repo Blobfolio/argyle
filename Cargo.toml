@@ -20,7 +20,7 @@ exclude = [
 ]
 
 [package.metadata.docs.rs]
-features = [ "dynamic-help" ]
+features = [ "docsrs", "dynamic-help" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -43,7 +43,12 @@ harness = false
 
 [features]
 default = []
-dynamic-help = [] # Enables ArgyleError::WantsDynamicHelp variant.
+
+# This is just a workaround for Docs.rs; don't enable this if you're a human!
+docsrs = []
+
+# Enables ArgyleError::WantsDynamicHelp variant.
+dynamic-help = []
 
 [profile.bench]
 lto = false

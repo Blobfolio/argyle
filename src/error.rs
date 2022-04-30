@@ -34,6 +34,7 @@ pub enum ArgyleError {
 	TooManyKeys,
 
 	#[cfg(feature = "dynamic-help")]
+	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "dynamic-help")))]
 	/// Wants subcommand help.
 	WantsDynamicHelp(Option<Box<[u8]>>),
 

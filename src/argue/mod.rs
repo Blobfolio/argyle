@@ -52,6 +52,7 @@ pub const FLAG_REQUIRED: u8 =     0b0000_0001;
 pub const FLAG_SUBCOMMAND: u8 =   0b0000_0010;
 
 #[cfg(feature = "dynamic-help")]
+#[cfg_attr(feature = "docsrs", doc(cfg(feature = "dynamic-help")))]
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsDynamicHelp`] if help args
