@@ -24,7 +24,7 @@ static mut ARGV: *const *const c_char = std::ptr::null();
 static CAPTURE: unsafe extern "C" fn(c_int, *const *const c_char) = capture;
 
 #[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
-#[allow(dead_code)]
+#[allow(dead_code, unsafe_code)]
 unsafe extern "C" fn capture(argc: c_int, argv: *const *const c_char) {
 	ARGC = argc;
 	ARGV = argv;
@@ -43,6 +43,7 @@ pub(super) struct Args {
 }
 
 impl Default for Args {
+	#[allow(unsafe_code)]
 	#[allow(clippy::cast_sign_loss)] // ARGC is non-negative.
 	/// # Raw Arguments.
 	///
@@ -76,6 +77,7 @@ impl Default for Args {
 impl Iterator for Args {
 	type Item = &'static [u8];
 
+	#[allow(unsafe_code)]
 	fn next(&mut self) -> Option<Self::Item> {
 		if self.next >= self.end { None }
 		else {
@@ -86,6 +88,7 @@ impl Iterator for Args {
 	}
 
 	#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
+	#[allow(unsafe_code)]
 	#[inline]
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let len = unsafe { self.end.offset_from(self.next) as usize };
@@ -95,6 +98,7 @@ impl Iterator for Args {
 
 impl ExactSizeIterator for Args {
 	#[allow(clippy::cast_sign_loss)] // Distance is always >= 0.
+	#[allow(unsafe_code)]
 	fn len(&self) -> usize {
 		unsafe { self.end.offset_from(self.next) as usize }
 	}

@@ -18,6 +18,8 @@
 pkg_id      := "argyle"
 pkg_name    := "Argyle"
 
+features    := "dynamic-help"
+
 cargo_dir   := "/tmp/" + pkg_id + "-cargo"
 cargo_bin   := cargo_dir + "/x86_64-unknown-linux-gnu/release/" + pkg_id
 doc_dir     := justfile_directory() + "/doc"
@@ -32,13 +34,13 @@ bench BENCH="":
 	if [ -z "{{ BENCH }}" ]; then
 		cargo bench \
 			--benches \
-			--all-features \
+			--features "{{ features }}" \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
 		cargo bench \
 			--bench "{{ BENCH }}" \
-			--all-features \
+			--features "{{ features }}" \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	fi
@@ -51,7 +53,7 @@ bench BENCH="":
 	cargo check \
 		--release \
 		--target x86_64-unknown-linux-gnu \
-		--all-features \
+		--features "{{ features }}" \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -72,7 +74,7 @@ bench BENCH="":
 	clear
 	cargo clippy \
 		--release \
-		--all-features \
+		--features "{{ features }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -88,7 +90,7 @@ bench BENCH="":
 	clear
 	cargo run \
 		-q \
-		--all-features \
+		--features "{{ features }}" \
 		--release \
 		--example "debug" \
 		--target x86_64-unknown-linux-gnu \
@@ -104,6 +106,7 @@ bench BENCH="":
 	# Make the docs.
 	cargo +nightly doc \
 		--release \
+		--features "docsrs,{{ features }}" \
 		--no-deps \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -134,7 +137,7 @@ bench BENCH="":
 	clear
 	cargo test \
 		--release \
-		--all-features \
+		--features "{{ features }}" \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
