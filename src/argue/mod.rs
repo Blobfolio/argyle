@@ -346,48 +346,6 @@ impl Argue {
 		Ok(())
 	}
 
-	#[deprecated(since = "0.5.5", note = "set flags during Argue::new")]
-	/// # With Flags.
-	///
-	/// This method can be used to set additional parsing options in cases
-	/// where the struct was initialized without calling [`Argue::new`].
-	///
-	/// This will only ever enable flags; it will not disable existing flags.
-	///
-	/// ## Errors
-	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::{Argue, FLAG_REQUIRED};
-	///
-	/// let args = Argue::new(0).unwrap().with_flags(FLAG_REQUIRED);
-	/// ```
-	pub fn with_flags(mut self, flags: u8) -> Result<Self, ArgyleError> {
-		self.flags |= flags;
-
-		// There are no arguments.
-		if self.args.is_empty() {
-			// Required?
-			if 0 != self.flags & FLAG_REQUIRED {
-				return Err(ArgyleError::Empty);
-			}
-		}
-		// Print version.
-		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
-			return Err(ArgyleError::WantsVersion);
-		}
-		// Check for help.
-		else if let Some(e) = self.help_flag() {
-			return Err(e);
-		}
-
-		Ok(self)
-	}
-
 	#[cfg(feature = "dynamic-help")]
 	/// # Handle Help.
 	fn help_flag(&self) -> Option<ArgyleError> {
