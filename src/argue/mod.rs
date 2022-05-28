@@ -2,25 +2,22 @@
 # Argyle: Argue
 */
 
-#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
-mod argv;
-
-
-
 use crate::{
 	ArgyleError,
 	ArgsOsStr,
 	KeyKind,
 };
 use std::{
-	borrow::Cow,
 	cell::Cell,
 	ffi::OsStr,
 	ops::{
 		BitOr,
 		Deref,
 	},
-	os::unix::ffi::OsStrExt,
+	os::unix::ffi::{
+		OsStrExt,
+		OsStringExt,
+	},
 };
 
 
@@ -33,7 +30,7 @@ use std::{
 /// The middle value is either said argument or the key.
 ///
 /// The third item is the attached value, if any.
-type KvIterItem = (bool, Cow<'static, [u8]>, Option<Cow<'static, [u8]>>);
+type KvIterItem = (bool, Vec<u8>, Option<Vec<u8>>);
 
 
 
@@ -123,12 +120,9 @@ const KEY_LEN: usize = 15;
 /// dereferenced to a slice or consumed into an owned vector for fully manual
 /// processing if desired.
 ///
-/// Arguments are processed and held as bytes — `Cow<'static, [u8]>` — rather
-/// than (os)strings, again leaving the choice of later conversion entirely up
-/// to the implementor. For non-Musl Linux systems, this is almost entirely
-/// non-allocating as CLI arguments map directly back to the `CStr` pointers.
-/// For other systems, `Argue` falls back to [`std::env::args_os`], so requires
-/// a bit more allocation.
+/// Arguments are processed and held as owned bytes rather than (os)strings,
+/// again leaving the choice of later conversion entirely up to the
+/// implementor.
 ///
 /// For simple applications, this agnostic approach can significantly reduce
 /// the overhead of processing CLI arguments, but because handling is left to
@@ -181,7 +175,6 @@ const KEY_LEN: usize = 15;
 /// ends tucked away as flags.
 ///
 /// ```no_run
-/// use std::borrow::Cow;
 /// use argyle::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
@@ -190,23 +183,23 @@ const KEY_LEN: usize = 15;
 /// // Check to see what's there.
 /// let switch: bool = args.switch(b"-s");
 /// let option: Option<&[u8]> = args.option(b"--my-opt");
-/// let extras: &[Cow<'static, [u8]>] = args.args();
+/// let extras: &[Vec<u8>] = args.args();
 /// ```
 ///
 /// If you just want a clean set to iterate over, `Argue` can be dereferenced
 /// to a slice:
 ///
 /// ```ignore
-/// let arg_slice: &[Cow<'static, [u8]>] = *args;
+/// let arg_slice: &[Vec<u8>] = *args;
 /// ```
 ///
 /// Or it can be converted into an owned Vector:
 /// ```ignore
-/// let args: Vec<Cow<'static, [u8]>> = args.take();
+/// let args: Vec<Vec<u8>> = args.take();
 /// ```
 pub struct Argue {
 	/// Parsed arguments.
-	args: Vec<Cow<'static, [u8]>>,
+	args: Vec<Vec<u8>>,
 	/// Keys.
 	///
 	/// This array holds the key indexes (from `self.args`) so checks can avoid
@@ -243,45 +236,14 @@ impl Default for Argue {
 }
 
 impl Deref for Argue {
-	type Target = [Cow<'static, [u8]>];
+	type Target = [Vec<u8>];
 	#[inline]
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
 /// ## Instantiation and Builder Patterns.
 impl Argue {
-	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
 	/// # New Instance.
-	///
-	/// For non-musl Linux targets, this populates arguments from the
-	/// environment by hooking directly into `argv`, avoiding unnecessary
-	/// allocations.
-	///
-	/// For other Unix systems, this simply parses the owned output of
-	/// [`std::env::args_os`].
-	///
-	/// The first (command path) argument is always excluded.
-	///
-	/// ## Errors
-	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::Argue;
-	///
-	/// let args = Argue::new(0);
-	/// ```
-	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		let mut out = kv_argue(argv::Args::default().map(kv_ref_adapter))?;
-		out.check_flags(flags)?;
-		Ok(out)
-	}
-
-	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
-	/// # New Instance (Fallback Version).
 	///
 	/// This simply parses the owned output of [`std::env::args_os`].
 	///
@@ -289,15 +251,71 @@ impl Argue {
 	///
 	/// This method will bubble any processing errors or aborts (like the
 	/// discovery of version or help flags).
-	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		use std::os::unix::ffi::OsStringExt;
+	pub fn new(chk_flags: u8) -> Result<Self, ArgyleError> {
+		let mut args: Vec<Vec<u8>> = Vec::with_capacity(KEY_SIZE);
+		let mut keys = [0_u16; KEY_SIZE];
+		let mut last = 0_u16;
+		let mut idx = 0_u16;
+		let mut flags = 0_u8;
 
-		let mut out = kv_argue(
-			std::env::args_os()
-				.skip(1)
-				.map(|x| kv_adapter(x.into_vec()))
-		)?;
-		out.check_flags(flags)?;
+		// Run through all the raw arguments, except the first one, which holds
+		// the program path.
+		for x in std::env::args_os().skip(1) {
+			let (standalone, key, value) = kv_adapter(x.into_vec());
+
+			// Skip leading empties.
+			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
+				continue;
+			}
+
+			// How many spots will this take up?
+			let inc: u16 =
+				if value.is_some() { 2 }
+				else if key == b"--" { break; }
+				else { 1 };
+
+			// Make sure we fit.
+			if u16::MAX - inc < idx { return Err(ArgyleError::TooManyArgs); }
+
+			// Just an arg?
+			if standalone { idx += inc; }
+			// Do key stuff!
+			else {
+				if value.is_none() {
+					match key.as_slice() {
+						b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
+						b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
+						_ => {},
+					}
+				}
+
+				let num_keys = keys[KEY_LEN] as usize;
+				if num_keys == KEY_LEN { return Err(ArgyleError::TooManyKeys); }
+
+				keys[num_keys] = idx;
+				keys[KEY_LEN] += 1;
+
+				idx += inc;
+				last = idx - 1;
+			}
+
+			// Push the things.
+			args.push(key);
+			if let Some(v) = value { args.push(v); }
+		}
+
+		// Turn it into an object!
+		let mut out = Self {
+			args,
+			keys,
+			last: Cell::new(last),
+			flags,
+		};
+
+		// Run any flag checks.
+		out.check_flags(chk_flags)?;
+
+		// Done!
 		Ok(out)
 	}
 
@@ -305,22 +323,24 @@ impl Argue {
 	///
 	/// This is run after [`Argue::new`] to see what's what.
 	fn check_flags(&mut self, flags: u8) -> Result<(), ArgyleError> {
-		self.flags |= flags;
+		if 0 < flags {
+			self.flags |= flags;
 
-		// There are no arguments.
-		if self.args.is_empty() {
-			// Required?
-			if 0 != self.flags & FLAG_REQUIRED {
-				return Err(ArgyleError::Empty);
+			// There are no arguments.
+			if self.args.is_empty() {
+				// Required?
+				if 0 != self.flags & FLAG_REQUIRED {
+					return Err(ArgyleError::Empty);
+				}
 			}
-		}
-		// Print version.
-		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
-			return Err(ArgyleError::WantsVersion);
-		}
-		// Check for help.
-		else if let Some(e) = self.help_flag() {
-			return Err(e);
+			// Print version.
+			else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
+				return Err(ArgyleError::WantsVersion);
+			}
+			// Check for help.
+			else if let Some(e) = self.help_flag() {
+				return Err(e);
+			}
 		}
 
 		Ok(())
@@ -372,10 +392,8 @@ impl Argue {
 	/// # Handle Help.
 	fn help_flag(&self) -> Option<ArgyleError> {
 		if 0 != self.flags & FLAG_ANY_HELP {
-			let cmd = self.args[0].as_ref();
-
 			// Help is requested!
-			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
+			if 0 != self.flags & FLAG_HAS_HELP || self.args[0] == b"help" {
 				// Static help.
 				if 0 != self.flags & FLAG_HELP {
 					return Some(ArgyleError::WantsHelp);
@@ -383,8 +401,8 @@ impl Argue {
 
 				// Dynamic help.
 				return Some(ArgyleError::WantsDynamicHelp(
-					if ! cmd.is_empty() && cmd[0] != b'-' && cmd != b"help" {
-						Some(Box::from(cmd))
+					if ! self.args[0].is_empty() && self.args[0][0] != b'-' && self.args[0] != b"help" {
+						Some(self.args[0].clone().into_boxed_slice())
 					}
 					else { None }
 				));
@@ -400,7 +418,7 @@ impl Argue {
 	fn help_flag(&self) -> Option<ArgyleError> {
 		if
 			0 != self.flags & FLAG_ANY_HELP &&
-			(0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref() == b"help")
+			(0 != self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
 		{
 				return Some(ArgyleError::WantsHelp);
 		}
@@ -437,7 +455,7 @@ impl Argue {
 			for line in raw.lines() {
 				let bytes = line.trim().as_bytes();
 				if ! bytes.is_empty() {
-					self.args.push(Cow::Owned(bytes.to_vec()));
+					self.args.push(bytes.to_vec());
 				}
 			}
 		}
@@ -456,7 +474,7 @@ impl Argue {
 	/// # Into Owned Vec.
 	///
 	/// Use this method to consume the struct and return the parsed arguments
-	/// as a `Vec<Cow<[u8]>>`.
+	/// as a `Vec<Vec<u8>>`.
 	///
 	/// If you merely want something to iterate over, you can alternatively
 	/// dereference the struct to a string slice.
@@ -465,11 +483,10 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
-	/// use std::borrow::Cow;
 	///
-	/// let args: Vec<Cow<[u8]>> = Argue::new(0).unwrap().take();
+	/// let args: Vec<Vec<u8>> = Argue::new(0).unwrap().take();
 	/// ```
-	pub fn take(self) -> Vec<Cow<'static, [u8]>> { self.args }
+	pub fn take(self) -> Vec<Vec<u8>> { self.args }
 }
 
 /// ## Queries.
@@ -491,7 +508,7 @@ impl Argue {
 	///
 	/// if let Some("happy") = args.peek() { ... }
 	/// ```
-	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Cow::as_ref) }
+	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Vec::as_slice) }
 
 	#[allow(unsafe_code)]
 	#[must_use]
@@ -516,7 +533,7 @@ impl Argue {
 	/// // if nothing were present.
 	/// let first: &[u8] = unsafe { args.peek_unchecked() };
 	/// ```
-	pub unsafe fn peek_unchecked(&self) -> &[u8] { self.args[0].as_ref() }
+	pub unsafe fn peek_unchecked(&self) -> &[u8] { &self.args[0] }
 
 	#[must_use]
 	#[inline]
@@ -536,7 +553,7 @@ impl Argue {
 		self.keys.iter()
 			.take(self.num_keys())
 			.map(|x| &self.args[*x as usize])
-			.any(|x| x.as_ref().eq(key))
+			.any(|x| x == key)
 	}
 
 	#[must_use]
@@ -560,8 +577,7 @@ impl Argue {
 			.take(self.num_keys())
 			.map(|x| &self.args[*x as usize])
 			.any(|x| {
-				let xr = x.as_ref();
-				xr.eq(short) || xr.eq(long)
+				x == short || x == long
 			})
 	}
 
@@ -624,12 +640,12 @@ impl Argue {
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
 		self.keys.iter()
 			.take(self.num_keys())
-			.position(|&x| self.args.get(x as usize).map_or(false, |x| x.as_ref().eq(key)))
+			.position(|&x| self.args.get(x as usize).map_or(false, |x| x == key))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
 				self.args.get(idx as usize).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
-					x.as_ref()
+					x.as_slice()
 				})
 			})
 	}
@@ -652,14 +668,13 @@ impl Argue {
 		self.keys.iter()
 			.take(self.num_keys())
 			.position(|&x| self.args.get(x as usize).map_or(false, |x| {
-				let xr = x.as_ref();
-				xr.eq(short) || xr.eq(long)
+				x == short || x == long
 			}))
 			.and_then(|idx| {
 				let idx = self.keys[idx] + 1;
 				self.args.get(idx as usize).map(|x| {
 					if idx > self.last.get() { self.last.set(idx); }
-					x.as_ref()
+					x.as_slice()
 				})
 			})
 	}
@@ -680,12 +695,11 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
-	/// use std::borrow::Cow;
 	///
 	/// let mut args = Argue::new(0).unwrap();
-	/// let extras: &[Cow<[u8]>] = args.args();
+	/// let extras: &[Vec<u8>] = args.args();
 	/// ```
-	pub fn args(&self) -> &[Cow<'static, [u8]>] {
+	pub fn args(&self) -> &[Vec<u8>] {
 		let idx = self.arg_idx();
 		if idx < self.args.len() {
 			&self.args[self.arg_idx()..]
@@ -704,7 +718,7 @@ impl Argue {
 	pub fn arg(&self, idx: usize) -> Option<&[u8]> {
 		let start_idx = self.arg_idx();
 		if start_idx + idx < self.args.len() {
-			Some(self.args[start_idx + idx].as_ref())
+			Some(&self.args[start_idx + idx])
 		}
 		else { None }
 	}
@@ -732,12 +746,8 @@ impl Argue {
 	/// ```
 	pub fn first_arg(&self) -> Result<&[u8], ArgyleError> {
 		let idx = self.arg_idx();
-		if idx >= self.args.len() {
-			Err(ArgyleError::NoArg)
-		}
-		else {
-			Ok(self.args[idx].as_ref())
-		}
+		if idx >= self.args.len() { Err(ArgyleError::NoArg) }
+		else { Ok(&self.args[idx]) }
 	}
 }
 
@@ -813,131 +823,31 @@ impl Argue {
 
 
 
-#[cfg(any(test, miri, not(target_os = "linux"), target_env = "musl"))]
 /// # Key/Value Iterator Adapter.
 ///
-/// This parses and Cows _owned_ arguments in preparation for `kv_argue` to
-/// build an actual [`Argue`] instance.
+/// This parses arguments in preparation for `kv_argue` to build an actual
+/// [`Argue`] instance.
 fn kv_adapter(mut src: Vec<u8>) -> KvIterItem {
 	match KeyKind::from(src.as_slice()) {
-		KeyKind::None => (true, Cow::Owned(src), None),
-		KeyKind::Short | KeyKind::Long => (false, Cow::Owned(src), None),
+		KeyKind::None => (true, src, None),
+		KeyKind::Short | KeyKind::Long => (false, src, None),
 		KeyKind::ShortV => {
 			let b = src.split_off(2);
-			(false, Cow::Owned(src), Some(Cow::Owned(b)))
+			(false, src, Some(b))
 		},
 		KeyKind::LongV(x) => {
 			let end = x.get() as usize;
 			if end + 1 < src.len() {
 				let b = src.split_off(end + 1);
 				src.truncate(end);
-				(false, Cow::Owned(src), Some(Cow::Owned(b)))
+				(false, src, Some(b))
 			}
 			else {
 				src.truncate(end);
-				(false, Cow::Owned(src), Some(Cow::Borrowed(&[])))
+				(false, src, Some(Vec::new()))
 			}
 		}
 	}
-}
-
-#[cfg(any(test, all(not(miri), target_os = "linux", not(target_env = "musl"))))]
-/// # Key/Value Iterator Adapter.
-///
-/// This parses and Cows _referenced_ arguments in preparation for `kv_argue`
-/// to build an actual [`Argue`] instance.
-fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
-	match KeyKind::from(src) {
-		KeyKind::None => (true, Cow::Borrowed(src), None),
-		KeyKind::Short | KeyKind::Long => (false, Cow::Borrowed(src), None),
-		KeyKind::ShortV => {
-			let (a, b) = src.split_at(2);
-			(false, Cow::Borrowed(a), Some(Cow::Borrowed(b)))
-		},
-		KeyKind::LongV(x) => {
-			let end = x.get() as usize;
-			if end + 1 < src.len() {
-				(
-					false,
-					Cow::Borrowed(&src[..end]),
-					Some(Cow::Borrowed(&src[end + 1..])),
-				)
-			}
-			else {
-				(false, Cow::Borrowed(&src[..end]), Some(Cow::Borrowed(&[])))
-			}
-		}
-	}
-}
-
-/// # Argue From Key/Value Iterator.
-///
-/// This takes a (parsed) argument iterator and outputs a new [`Argue`]
-/// instance, unless the number of keys or args exceed the limits.
-fn kv_argue<T>(src: T) -> Result<Argue, ArgyleError>
-where T: Iterator<Item = KvIterItem> {
-	let mut args: Vec<Cow<[u8]>> = Vec::with_capacity(KEY_SIZE);
-	let mut keys = [0_u16; KEY_SIZE];
-	let mut last = 0_u16;
-	let mut idx = 0_u16;
-	let mut any = false;
-	let mut flags = 0_u8;
-
-	for (standalone, key, value) in src {
-		// Skip leading empties.
-		if ! any {
-			if key.is_empty() || key.iter().all(u8::is_ascii_whitespace) {
-				continue;
-			}
-			any = true;
-		}
-
-		// How many spots will this take up?
-		let inc: u16 =
-			if value.is_some() { 2 }
-			else if key.as_ref() == b"--" { break; }
-			else { 1 };
-
-		// Make sure we fit.
-		if u16::MAX - inc < idx {
-			return Err(ArgyleError::TooManyArgs);
-		}
-
-		// Just an arg?
-		if standalone { idx += inc; }
-		// Do key stuff!
-		else {
-			if value.is_none() {
-				match key.as_ref() {
-					b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
-					b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
-					_ => {},
-				}
-			}
-
-			let num_keys = keys[KEY_LEN] as usize;
-			if num_keys == KEY_LEN {
-				return Err(ArgyleError::TooManyKeys);
-			}
-
-			keys[num_keys] = idx;
-			keys[KEY_LEN] += 1;
-
-			idx += inc;
-			last = idx - 1;
-		}
-
-		// Push the things.
-		args.push(key);
-		if let Some(v) = value { args.push(v); }
-	}
-
-	Ok(Argue {
-		args,
-		keys,
-		last: Cell::new(last),
-		flags,
-	})
 }
 
 
@@ -946,6 +856,76 @@ where T: Iterator<Item = KvIterItem> {
 mod tests {
 	use super::*;
 	use brunch as _;
+
+	/// # Argue From Key/Value Iterator.
+	///
+	/// This mimics [`Argue::new`], allowing us to populate an object with
+	/// arbitrary arguments for testing.
+	///
+	/// It would be nice to not have to duplicate this, but it hurts runtime
+	/// performance, so whatever. Haha.
+	fn kv_argue<T>(src: T) -> Result<Argue, ArgyleError>
+	where T: Iterator<Item = KvIterItem> {
+		let mut args: Vec<Vec<u8>> = Vec::with_capacity(KEY_SIZE);
+		let mut keys = [0_u16; KEY_SIZE];
+		let mut last = 0_u16;
+		let mut idx = 0_u16;
+		let mut flags = 0_u8;
+
+		for (standalone, key, value) in src {
+			// Skip leading empties.
+			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
+				continue;
+			}
+
+			// How many spots will this take up?
+			let inc: u16 =
+				if value.is_some() { 2 }
+				else if key == b"--" { break; }
+				else { 1 };
+
+			// Make sure we fit.
+			if u16::MAX - inc < idx { return Err(ArgyleError::TooManyArgs); }
+
+			// Just an arg?
+			if standalone { idx += inc; }
+			// Do key stuff!
+			else {
+				if value.is_none() {
+					match key.as_slice() {
+						b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
+						b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
+						_ => {},
+					}
+				}
+
+				let num_keys = keys[KEY_LEN] as usize;
+				if num_keys == KEY_LEN { return Err(ArgyleError::TooManyKeys); }
+
+				keys[num_keys] = idx;
+				keys[KEY_LEN] += 1;
+
+				idx += inc;
+				last = idx - 1;
+			}
+
+			// Push the things.
+			args.push(key);
+			if let Some(v) = value { args.push(v); }
+		}
+
+		Ok(Argue {
+			args,
+			keys,
+			last: Cell::new(last),
+			flags,
+		})
+	}
+
+	/// # Key/Value Iterator Adapter.
+	fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
+		kv_adapter(src.to_vec())
+	}
 
 	#[test]
 	fn t_parse_args() {
@@ -962,13 +942,13 @@ mod tests {
 		assert_eq!(
 			*args,
 			[
-				Cow::from(&b"hey"[..]),
-				Cow::from(&b"-k"[..]),
-				Cow::from(&b"Val"[..]),
-				Cow::from(&b"--empty"[..]),
-				Cow::from(vec![]),
-				Cow::from(&b"--key"[..]),
-				Cow::from(&b"Val"[..]),
+				b"hey"[..].to_vec(),
+				b"-k"[..].to_vec(),
+				b"Val"[..].to_vec(),
+				b"--empty"[..].to_vec(),
+				vec![],
+				b"--key"[..].to_vec(),
+				b"Val"[..].to_vec(),
 			]
 		);
 
@@ -989,14 +969,14 @@ mod tests {
 		assert_eq!(
 			*args,
 			[
-				Cow::from(&b"--prefix"[..]),
-				Cow::from(&b"hey"[..]),
-				Cow::from(&b"-k"[..]),
-				Cow::from(&b"Val"[..]),
-				Cow::from(&b"--empty"[..]),
-				Cow::from(vec![]),
-				Cow::from(&b"--key"[..]),
-				Cow::from(&b"Val"[..]),
+				b"--prefix"[..].to_vec(),
+				b"hey"[..].to_vec(),
+				b"-k"[..].to_vec(),
+				b"Val"[..].to_vec(),
+				b"--empty"[..].to_vec(),
+				vec![],
+				b"--key"[..].to_vec(),
+				b"Val"[..].to_vec(),
 			]
 		);
 
@@ -1020,11 +1000,6 @@ mod tests {
 		assert_eq!(args.arg(1), Some(&b"World"[..]));
 		assert_eq!(args.arg(2), None);
 		assert_eq!(args.args(), trailing);
-
-		// One last time: let's make sure extending from a vec works just like
-		// extending from slices.
-		let args2 = kv_argue(base.iter().map(|x| kv_adapter(x.to_vec()))).unwrap();
-		assert_eq!(*args, *args2);
 	}
 
 	#[test]

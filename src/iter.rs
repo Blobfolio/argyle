@@ -3,7 +3,6 @@
 */
 
 use std::{
-	borrow::Cow,
 	ffi::OsStr,
 	os::unix::ffi::OsStrExt,
 };
@@ -15,7 +14,7 @@ use std::{
 ///
 /// This iterates through the arguments of an [`Argue`](crate::Argue) as [`OsStr`](std::ffi::OsStr) values.
 pub struct ArgsOsStr<'a> {
-	inner: &'a [Cow<'static, [u8]>],
+	inner: &'a [Vec<u8>],
 	pos: usize,
 }
 
@@ -47,7 +46,7 @@ impl ExactSizeIterator for ArgsOsStr<'_> {
 impl<'a> ArgsOsStr<'a> {
 	#[inline]
 	/// # New.
-	pub(crate) const fn new(inner: &'a [Cow<'static, [u8]>]) -> Self {
+	pub(crate) const fn new(inner: &'a [Vec<u8>]) -> Self {
 		Self {
 			inner,
 			pos: 0,
