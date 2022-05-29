@@ -9,7 +9,10 @@ use crate::{
 };
 use std::{
 	cell::Cell,
-	ffi::OsStr,
+	ffi::{
+		OsStr,
+		OsString,
+	},
 	ops::{
 		BitOr,
 		Deref,
@@ -19,18 +22,6 @@ use std::{
 		OsStringExt,
 	},
 };
-
-
-
-/// # Key/Value Iterator Item.
-///
-/// The bool indicates whether or not this was a miscellaneous argument (i.e.
-/// not a key).
-///
-/// The middle value is either said argument or the key.
-///
-/// The third item is the attached value, if any.
-type KvIterItem = (bool, Vec<u8>, Option<Vec<u8>>);
 
 
 
@@ -100,14 +91,7 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 
 
 
-/// # The size of our keys array.
-const KEY_SIZE: usize = 16;
-/// # The index noting total key length.
-const KEY_LEN: usize = 15;
-
-
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// `Argue` is an agnostic CLI argument parser. Unlike more robust libraries
 /// like [clap](https://crates.io/crates/clap), `Argue` does not hold
 /// information about expected or required arguments; it merely parses the raw
@@ -204,10 +188,7 @@ pub struct Argue {
 	///
 	/// This array holds the key indexes (from `self.args`) so checks can avoid
 	/// re-evaluation, etc.
-	///
-	/// The last slot holds the number of keys, hence only 15 total keys are
-	/// supported.
-	keys: [u16; KEY_SIZE],
+	keys: Vec<usize>,
 	/// Highest non-arg index.
 	///
 	/// This is used to divide the arguments between named and trailing values.
@@ -218,21 +199,9 @@ pub struct Argue {
 	/// The only way `Argue` knows switches from options is by the method
 	/// invoked by the implementing library. Be sure to request all options
 	/// before asking for trailing arguments.
-	last: Cell<u16>,
+	last: Cell<usize>,
 	/// Flags.
 	flags: u8,
-}
-
-impl Default for Argue {
-	#[inline]
-	fn default() -> Self {
-		Self {
-			args: Vec::with_capacity(KEY_SIZE),
-			keys: [0_u16; KEY_SIZE],
-			last: Cell::new(0),
-			flags: 0,
-		}
-	}
 }
 
 impl Deref for Argue {
@@ -241,8 +210,84 @@ impl Deref for Argue {
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
+impl<'a> FromIterator<&'a [u8]> for Argue {
+	fn from_iter<I: IntoIterator<Item = &'a [u8]>>(src: I) -> Self {
+		src.into_iter().map(<[u8]>::to_vec).collect()
+	}
+}
+
+impl FromIterator<Vec<u8>> for Argue {
+	fn from_iter<I: IntoIterator<Item = Vec<u8>>>(src: I) -> Self {
+		src.into_iter().map(OsString::from_vec).collect()
+	}
+}
+
+impl FromIterator<OsString> for Argue {
+	fn from_iter<I: IntoIterator<Item = OsString>>(src: I) -> Self {
+		let mut args: Vec<Vec<u8>> = Vec::with_capacity(16);
+		let mut keys: Vec<usize> = Vec::with_capacity(8);
+		let mut last = 0_usize;
+		let mut idx = 0_usize;
+		let mut flags = 0_u8;
+
+		// Run through all the raw arguments, except the first one, which holds
+		// the program path.
+		for x in src {
+			// Parse it.
+			let (standalone, key, value) = KeyKind::parse(x.into_vec());
+
+			// Skip leading empties.
+			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
+				continue;
+			}
+
+			// Just an arg?
+			if standalone {
+				// Short-circuit if we come across a separator.
+				if key == b"--" { break; }
+
+				idx += 1;
+				args.push(key);
+			}
+			// Do key and/or value stuff!
+			else {
+				keys.push(idx);
+
+				match value {
+					Some(v) => {
+						last = idx + 1;
+						idx += 2;
+						args.push(key);
+						args.push(v);
+					},
+					None => {
+						match key.as_slice() {
+							b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
+							b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
+							_ => {},
+						}
+
+						last = idx;
+						idx += 1;
+						args.push(key);
+					},
+				}
+			}
+		}
+
+		// Turn it into an object!
+		Self {
+			args,
+			keys,
+			last: Cell::new(last),
+			flags,
+		}
+	}
+}
+
 /// ## Instantiation and Builder Patterns.
 impl Argue {
+	#[inline]
 	/// # New Instance.
 	///
 	/// This simply parses the owned output of [`std::env::args_os`].
@@ -252,70 +297,8 @@ impl Argue {
 	/// This method will bubble any processing errors or aborts (like the
 	/// discovery of version or help flags).
 	pub fn new(chk_flags: u8) -> Result<Self, ArgyleError> {
-		let mut args: Vec<Vec<u8>> = Vec::with_capacity(KEY_SIZE);
-		let mut keys = [0_u16; KEY_SIZE];
-		let mut last = 0_u16;
-		let mut idx = 0_u16;
-		let mut flags = 0_u8;
-
-		// Run through all the raw arguments, except the first one, which holds
-		// the program path.
-		for x in std::env::args_os().skip(1) {
-			let (standalone, key, value) = kv_adapter(x.into_vec());
-
-			// Skip leading empties.
-			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
-				continue;
-			}
-
-			// How many spots will this take up?
-			let inc: u16 =
-				if value.is_some() { 2 }
-				else if key == b"--" { break; }
-				else { 1 };
-
-			// Make sure we fit.
-			if u16::MAX - inc < idx { return Err(ArgyleError::TooManyArgs); }
-
-			// Just an arg?
-			if standalone { idx += inc; }
-			// Do key stuff!
-			else {
-				if value.is_none() {
-					match key.as_slice() {
-						b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
-						b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
-						_ => {},
-					}
-				}
-
-				let num_keys = keys[KEY_LEN] as usize;
-				if num_keys == KEY_LEN { return Err(ArgyleError::TooManyKeys); }
-
-				keys[num_keys] = idx;
-				keys[KEY_LEN] += 1;
-
-				idx += inc;
-				last = idx - 1;
-			}
-
-			// Push the things.
-			args.push(key);
-			if let Some(v) = value { args.push(v); }
-		}
-
-		// Turn it into an object!
-		let mut out = Self {
-			args,
-			keys,
-			last: Cell::new(last),
-			flags,
-		};
-
-		// Run any flag checks.
+		let mut out: Self = std::env::args_os().skip(1).collect();
 		out.check_flags(chk_flags)?;
-
-		// Done!
 		Ok(out)
 	}
 
@@ -508,10 +491,7 @@ impl Argue {
 	/// let switch: bool = args.switch(b"--my-switch");
 	/// ```
 	pub fn switch(&self, key: &[u8]) -> bool {
-		self.keys.iter()
-			.take(self.num_keys())
-			.map(|x| &self.args[*x as usize])
-			.any(|x| x == key)
+		self.keys.iter().any(|&x| self.args[x] == key)
 	}
 
 	#[must_use]
@@ -531,12 +511,7 @@ impl Argue {
 	/// let switch: bool = args.switch2(b"-s", b"--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
-		self.keys.iter()
-			.take(self.num_keys())
-			.map(|x| &self.args[*x as usize])
-			.any(|x| {
-				x == short || x == long
-			})
+		self.keys.iter().any(|&x| self.args[x] == short || self.args[x] == long)
 	}
 
 	#[must_use]
@@ -596,16 +571,11 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option(b"--my-opt");
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
-		self.keys.iter()
-			.take(self.num_keys())
-			.position(|&x| self.args.get(x as usize).map_or(false, |x| x == key))
-			.and_then(|idx| {
-				let idx = self.keys[idx] + 1;
-				self.args.get(idx as usize).map(|x| {
-					if idx > self.last.get() { self.last.set(idx); }
-					x.as_slice()
-				})
-			})
+		let idx = self.keys.iter().find(|&&x| self.args[x] == key)? + 1;
+		self.args.get(idx).map(|x| {
+			if idx > self.last.get() { self.last.set(idx); }
+			x.as_slice()
+		})
 	}
 
 	/// # Option x2.
@@ -623,18 +593,11 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option2(b"-o", b"--my-opt");
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
-		self.keys.iter()
-			.take(self.num_keys())
-			.position(|&x| self.args.get(x as usize).map_or(false, |x| {
-				x == short || x == long
-			}))
-			.and_then(|idx| {
-				let idx = self.keys[idx] + 1;
-				self.args.get(idx as usize).map(|x| {
-					if idx > self.last.get() { self.last.set(idx); }
-					x.as_slice()
-				})
-			})
+		let idx = self.keys.iter().find(|&&x| self.args[x] == short || self.args[x] == long)? + 1;
+		self.args.get(idx).map(|x| {
+			if idx > self.last.get() { self.last.set(idx); }
+			x.as_slice()
+		})
 	}
 
 	#[must_use]
@@ -770,41 +733,8 @@ impl Argue {
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
 	fn arg_idx(&self) -> usize {
-		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.last.get() as usize + 1 }
-	}
-
-	#[inline]
-	/// # Num Keys.
-	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
-}
-
-
-
-/// # Key/Value Iterator Adapter.
-///
-/// This parses arguments in preparation for `kv_argue` to build an actual
-/// [`Argue`] instance.
-fn kv_adapter(mut src: Vec<u8>) -> KvIterItem {
-	match KeyKind::from(src.as_slice()) {
-		KeyKind::None => (true, src, None),
-		KeyKind::Short | KeyKind::Long => (false, src, None),
-		KeyKind::ShortV => {
-			let b = src.split_off(2);
-			(false, src, Some(b))
-		},
-		KeyKind::LongV(x) => {
-			let end = x.get() as usize;
-			if end + 1 < src.len() {
-				let b = src.split_off(end + 1);
-				src.truncate(end);
-				(false, src, Some(b))
-			}
-			else {
-				src.truncate(end);
-				(false, src, Some(Vec::new()))
-			}
-		}
+		if self.keys.is_empty() && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
+		else { self.last.get() + 1 }
 	}
 }
 
@@ -815,76 +745,6 @@ mod tests {
 	use super::*;
 	use brunch as _;
 
-	/// # Argue From Key/Value Iterator.
-	///
-	/// This mimics [`Argue::new`], allowing us to populate an object with
-	/// arbitrary arguments for testing.
-	///
-	/// It would be nice to not have to duplicate this, but it hurts runtime
-	/// performance, so whatever. Haha.
-	fn kv_argue<T>(src: T) -> Result<Argue, ArgyleError>
-	where T: Iterator<Item = KvIterItem> {
-		let mut args: Vec<Vec<u8>> = Vec::with_capacity(KEY_SIZE);
-		let mut keys = [0_u16; KEY_SIZE];
-		let mut last = 0_u16;
-		let mut idx = 0_u16;
-		let mut flags = 0_u8;
-
-		for (standalone, key, value) in src {
-			// Skip leading empties.
-			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
-				continue;
-			}
-
-			// How many spots will this take up?
-			let inc: u16 =
-				if value.is_some() { 2 }
-				else if key == b"--" { break; }
-				else { 1 };
-
-			// Make sure we fit.
-			if u16::MAX - inc < idx { return Err(ArgyleError::TooManyArgs); }
-
-			// Just an arg?
-			if standalone { idx += inc; }
-			// Do key stuff!
-			else {
-				if value.is_none() {
-					match key.as_slice() {
-						b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
-						b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
-						_ => {},
-					}
-				}
-
-				let num_keys = keys[KEY_LEN] as usize;
-				if num_keys == KEY_LEN { return Err(ArgyleError::TooManyKeys); }
-
-				keys[num_keys] = idx;
-				keys[KEY_LEN] += 1;
-
-				idx += inc;
-				last = idx - 1;
-			}
-
-			// Push the things.
-			args.push(key);
-			if let Some(v) = value { args.push(v); }
-		}
-
-		Ok(Argue {
-			args,
-			keys,
-			last: Cell::new(last),
-			flags,
-		})
-	}
-
-	/// # Key/Value Iterator Adapter.
-	fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
-		kv_adapter(src.to_vec())
-	}
-
 	#[test]
 	fn t_parse_args() {
 		let mut base: Vec<&[u8]> = vec![
@@ -894,7 +754,7 @@ mod tests {
 			b"--key=Val",
 		];
 
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 
 		// Check the overall structure.
 		assert_eq!(
@@ -921,7 +781,7 @@ mod tests {
 
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 
 		// The whole thing again.
 		assert_eq!(
@@ -942,6 +802,11 @@ mod tests {
 		assert!(args.switch(b"--prefix"));
 		assert_eq!(args.option(b"--prefix"), Some(&b"hey"[..]));
 
+		// This is as good a place as any to double-check the _os version links
+		// up correctly.
+		let hey = OsStr::new("hey");
+		assert_eq!(args.option_os(b"--prefix"), Some(hey));
+
 		// Something that doesn't exist.
 		assert_eq!(args.option(b"foo"), None);
 
@@ -952,7 +817,7 @@ mod tests {
 		// Let's also make sure the trailing arguments work too.
 		let trailing: &[&[u8]] = &[b"Hello", b"World"];
 		base.extend_from_slice(trailing);
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert_eq!(args.first_arg(), Ok(&b"Hello"[..]));
 		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
 		assert_eq!(args.arg(1), Some(&b"World"[..]));
@@ -968,7 +833,7 @@ mod tests {
 		];
 
 		// We should be wanting a version.
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 
 		assert!(matches!(
 			args.check_flags(FLAG_VERSION),
@@ -976,32 +841,32 @@ mod tests {
 		));
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// Repeat with the long flag.
 		base[1] = b"--version";
 
 		// We should be wanting a version.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// One last time without a version arg present.
 		base[1] = b"--ok";
 
 		// We should be wanting a version.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 	}
 
@@ -1013,7 +878,7 @@ mod tests {
 		];
 
 		// We should be wanting a static help.
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1022,7 +887,7 @@ mod tests {
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			match args.check_flags(FLAG_DYNAMIC_HELP) {
 				Err(ArgyleError::WantsDynamicHelp(e)) => {
 					let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
@@ -1033,14 +898,14 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Again with help flag first.
 		base[0] = b"--help";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1048,7 +913,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.check_flags(FLAG_DYNAMIC_HELP),
@@ -1057,7 +922,7 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without wanting help.
@@ -1065,7 +930,7 @@ mod tests {
 		base[1] = b"--foo";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1073,7 +938,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.check_flags(FLAG_DYNAMIC_HELP),
@@ -1082,25 +947,25 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// One last time with no helpish things.
 		base[0] = b"hey";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			assert!(args.check_flags(FLAG_DYNAMIC_HELP).is_ok());
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 	}
 
@@ -1121,7 +986,7 @@ mod tests {
 			b"--one-more",
 		];
 
-		let args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let args: Argue = base.iter().copied().collect();
 		let flags: u8 = args.bitflags([
 			(&b"-k"[..], FLAG_K),
 			(&b"--empty"[..], FLAG_EMPTY),
@@ -1135,34 +1000,5 @@ mod tests {
 		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
 		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
 		assert_eq!(flags & FLAG_OTHER, 0);
-	}
-
-	#[test]
-	#[cfg_attr(miri, ignore)]
-	fn t_overflow() {
-		// Let's start with one-too-many elements.
-		let mut nope: Vec<&[u8]> = (0..65536_u32).into_iter()
-			.map(|_x| b"hi".as_slice())
-			.collect();
-
-		// We can't exceed u16::MAX elements.
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_err());
-
-		// This is an awful lot of arguments, but should fit now!
-		nope.pop();
-		assert_eq!(nope.len(), 65535);
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_ok());
-
-		// We also can't have more than 15 keys.
-		nope.truncate(0);
-		for _ in 0..16 {
-			nope.push(b"-h");
-		}
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_err());
-
-		// But if we remove one it should work.
-		nope.pop();
-		assert_eq!(nope.len(), 15);
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_ok());
 	}
 }

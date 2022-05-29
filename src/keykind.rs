@@ -72,6 +72,32 @@ impl From<&[u8]> for KeyKind {
 	}
 }
 
+type Parsed = (bool, Vec<u8>, Option<Vec<u8>>);
+impl KeyKind {
+	/// # Parse Raw Argument.
+	///
+	/// This parses a raw argument, determining if it is a key or not. If a
+	/// value needs to be split off, it handles that too.
+	pub(crate) fn parse(mut src: Vec<u8>) -> Parsed {
+		match Self::from(src.as_slice()) {
+			Self::None => (true, src, None),
+			Self::Short | Self::Long => (false, src, None),
+			Self::ShortV => {
+				let b = src.split_off(2);
+				(false, src, Some(b))
+			},
+			Self::LongV(x) => {
+				let end = x.get() as usize;
+				let b =
+					if end + 1 < src.len() { src.split_off(end + 1) }
+					else { Vec::new() };
+				src.truncate(end);
+				(false, src, Some(b))
+			}
+		}
+	}
+}
+
 
 
 #[cfg(test)]
