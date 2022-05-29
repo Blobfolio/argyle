@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/argyle/badge.svg)](https://docs.rs/argyle/)
 [![crates.io](https://img.shields.io/crates/v/argyle.svg)](https://crates.io/crates/argyle)
 
-This crate contains an agnostic CLI argument parser called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments into a consistent state so the implementor can query them as needed.
+This crate contains an agnostic CLI argument parser for Unix platforms called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments ([`std::env::args_os`]) into a consistent state so the implementor can query them as needed.
 
 Post-processing is an exercise largely left to the implementing library to do in its own way, in its own time. [`Argue`] exposes several methods for quickly querying the individual pieces of the set, but it can also be dereferenced to a slice or consumed into an owned vector for fully manual processing if desired.
 
@@ -20,7 +20,7 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```ignore
 [dependencies]
-argyle = "0.5.*"
+argyle = "0.6.*"
 ```
 
 

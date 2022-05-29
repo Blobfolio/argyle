@@ -1,6 +1,17 @@
 # Changelog
 
 
+
+## [0.6.0](https://github.com/Blobfolio/argyle/releases/tag/v0.6.0) - TBD
+
+All arguments held by `Argue` are now stored as owned bytes (no more `Cow`). This will be a little slower than previous releases, but safer, as the state can now be maintained in the (unlikely) event the environment is later mutated.
+
+The total number of keys are no longer restricted. Similarly, individual argument length restrictions have been removed. Go wild!
+
+The different Unix implementations have all been merged together under the hood, so should now be more consistent across platforms. (This library is still _not_ compatible with Windows.)
+
+
+
 ## [0.5.6](https://github.com/Blobfolio/argyle/releases/tag/v0.5.6) - 2022-05-19
 
 ### Changed

@@ -4,10 +4,6 @@
 **Note:** This is not intended for external use and is subject to change.
 */
 
-use std::num::NonZeroU16;
-
-
-
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq)]
 /// The `KeyKind` enum is used to differentiate between the types of CLI argument
@@ -31,7 +27,7 @@ pub enum KeyKind {
 	Long,
 	/// A long key with a value. The number indicates the position of the `=`
 	/// character. Everything before is the key; everything after the value.
-	LongV(NonZeroU16),
+	LongV(usize),
 }
 
 impl Default for KeyKind {
@@ -40,7 +36,6 @@ impl Default for KeyKind {
 }
 
 impl From<&[u8]> for KeyKind {
-	#[allow(unsafe_code)]
 	fn from(txt: &[u8]) -> Self {
 		let len: usize = txt.len();
 		if len >= 2 && txt[0] == b'-' {
@@ -50,15 +45,7 @@ impl From<&[u8]> for KeyKind {
 				if len > 2 && txt[2].is_ascii_alphabetic() {
 					return txt.iter()
 						.position(|&x| x == b'=')
-						.map_or(
-							Self::Long, |x| u16::try_from(x)
-								// Safety: Argue verifies the length is less
-								// than u16::MAX, and this method verifies
-								// non-empty.
-								.map_or(Self::Long, |x| Self::LongV(unsafe {
-									NonZeroU16::new_unchecked(x)
-								}))
-						);
+						.map_or(Self::Long, Self::LongV);
 				}
 			}
 			// Is short.
@@ -69,32 +56,6 @@ impl From<&[u8]> for KeyKind {
 		}
 
 		Self::None
-	}
-}
-
-type Parsed = (bool, Vec<u8>, Option<Vec<u8>>);
-impl KeyKind {
-	/// # Parse Raw Argument.
-	///
-	/// This parses a raw argument, determining if it is a key or not. If a
-	/// value needs to be split off, it handles that too.
-	pub(crate) fn parse(mut src: Vec<u8>) -> Parsed {
-		match Self::from(src.as_slice()) {
-			Self::None => (true, src, None),
-			Self::Short | Self::Long => (false, src, None),
-			Self::ShortV => {
-				let b = src.split_off(2);
-				(false, src, Some(b))
-			},
-			Self::LongV(x) => {
-				let end = x.get() as usize;
-				let b =
-					if end + 1 < src.len() { src.split_off(end + 1) }
-					else { Vec::new() };
-				src.truncate(end);
-				(false, src, Some(b))
-			}
-		}
 	}
 }
 
@@ -116,25 +77,25 @@ mod tests {
 		assert_eq!(KeyKind::from(&b"--0"[..]), KeyKind::None);
 		assert_eq!(KeyKind::from(&b"--yes"[..]), KeyKind::Long);
 		assert_eq!(KeyKind::from(&b"--y-p"[..]), KeyKind::Long);
-		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(NonZeroU16::new(5).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(NonZeroU16::new(5).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes=no"[..]), KeyKind::LongV(5));
+		assert_eq!(KeyKind::from(&b"--yes="[..]), KeyKind::LongV(5));
 
 		// Test in and around the 16-char boundary.
-		assert_eq!(KeyKind::from(&b"--yes_="[..]), KeyKind::LongV(NonZeroU16::new(6).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes__="[..]), KeyKind::LongV(NonZeroU16::new(7).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes___="[..]), KeyKind::LongV(NonZeroU16::new(8).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes____="[..]), KeyKind::LongV(NonZeroU16::new(9).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes_____="[..]), KeyKind::LongV(NonZeroU16::new(10).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes______="[..]), KeyKind::LongV(NonZeroU16::new(11).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes_______="[..]), KeyKind::LongV(NonZeroU16::new(12).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes________="[..]), KeyKind::LongV(NonZeroU16::new(13).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes_________="[..]), KeyKind::LongV(NonZeroU16::new(14).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(NonZeroU16::new(15).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(NonZeroU16::new(16).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(NonZeroU16::new(17).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes____________-="[..]), KeyKind::LongV(NonZeroU16::new(18).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes_____________-="[..]), KeyKind::LongV(NonZeroU16::new(19).unwrap()));
-		assert_eq!(KeyKind::from(&b"--yes______________-="[..]), KeyKind::LongV(NonZeroU16::new(20).unwrap()));
+		assert_eq!(KeyKind::from(&b"--yes_="[..]), KeyKind::LongV(6));
+		assert_eq!(KeyKind::from(&b"--yes__="[..]), KeyKind::LongV(7));
+		assert_eq!(KeyKind::from(&b"--yes___="[..]), KeyKind::LongV(8));
+		assert_eq!(KeyKind::from(&b"--yes____="[..]), KeyKind::LongV(9));
+		assert_eq!(KeyKind::from(&b"--yes_____="[..]), KeyKind::LongV(10));
+		assert_eq!(KeyKind::from(&b"--yes______="[..]), KeyKind::LongV(11));
+		assert_eq!(KeyKind::from(&b"--yes_______="[..]), KeyKind::LongV(12));
+		assert_eq!(KeyKind::from(&b"--yes________="[..]), KeyKind::LongV(13));
+		assert_eq!(KeyKind::from(&b"--yes_________="[..]), KeyKind::LongV(14));
+		assert_eq!(KeyKind::from(&b"--yes__________="[..]), KeyKind::LongV(15));
+		assert_eq!(KeyKind::from(&b"--yes___________="[..]), KeyKind::LongV(16));
+		assert_eq!(KeyKind::from(&b"--yes____________="[..]), KeyKind::LongV(17));
+		assert_eq!(KeyKind::from(&b"--yes____________-="[..]), KeyKind::LongV(18));
+		assert_eq!(KeyKind::from(&b"--yes_____________-="[..]), KeyKind::LongV(19));
+		assert_eq!(KeyKind::from(&b"--yes______________-="[..]), KeyKind::LongV(20));
 		assert_eq!(KeyKind::from(&b"--yes_____________"[..]), KeyKind::Long);
 
 		// Does this work?
@@ -144,7 +105,7 @@ mod tests {
 		);
 		assert_eq!(
 			KeyKind::from("--BjörkGuðmunds=dóttir".as_bytes()),
-			KeyKind::LongV(NonZeroU16::new(17).unwrap())
+			KeyKind::LongV(17)
 		);
 	}
 }

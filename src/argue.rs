@@ -98,6 +98,8 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 /// arguments into a consistent state so the implementor can query them as
 /// needed.
 ///
+/// (It is effectively a wrapper around [`std::env::args_os`].)
+///
 /// Post-processing is an exercise largely left to the implementing library to
 /// do in its own way, in its own time. `Argue` exposes several methods for
 /// quickly querying the individual pieces of the set, but it can also be
@@ -148,10 +150,7 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 /// ### Restrictions
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will ever match.
-/// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
-/// 3. The total number of keys, values, and arguments may not exceed `u16::MAX`.
-/// 4. A glued `--key=Val` expression cannot be longer than `u16::MAX` bytes.
-/// 5. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
+/// 2. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
 ///
 /// ## Examples
 ///
@@ -174,7 +173,7 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 /// to a slice:
 ///
 /// ```ignore
-/// let arg_slice: &[Vec<u8>] = *args;
+/// let arg_slice: &[Vec<u8>] = &args;
 /// ```
 ///
 /// Or it can be converted into an owned Vector:
@@ -184,11 +183,7 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 pub struct Argue {
 	/// Parsed arguments.
 	args: Vec<Vec<u8>>,
-	/// Keys.
-	///
-	/// This array holds the key indexes (from `self.args`) so checks can avoid
-	/// re-evaluation, etc.
-	keys: Vec<usize>,
+
 	/// Highest non-arg index.
 	///
 	/// This is used to divide the arguments between named and trailing values.
@@ -200,6 +195,7 @@ pub struct Argue {
 	/// invoked by the implementing library. Be sure to request all options
 	/// before asking for trailing arguments.
 	last: Cell<usize>,
+
 	/// Flags.
 	flags: u8,
 }
@@ -225,60 +221,65 @@ impl FromIterator<Vec<u8>> for Argue {
 impl FromIterator<OsString> for Argue {
 	fn from_iter<I: IntoIterator<Item = OsString>>(src: I) -> Self {
 		let mut args: Vec<Vec<u8>> = Vec::with_capacity(16);
-		let mut keys: Vec<usize> = Vec::with_capacity(8);
 		let mut last = 0_usize;
-		let mut idx = 0_usize;
 		let mut flags = 0_u8;
+		let mut idx = 0_usize;
 
-		// Run through all the raw arguments, except the first one, which holds
-		// the program path.
-		for x in src {
-			// Parse it.
-			let (standalone, key, value) = KeyKind::parse(x.into_vec());
+		for a in src {
+			let mut a = a.into_vec();
+			let key: &[u8] = a.as_slice();
 
 			// Skip leading empties.
 			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
 				continue;
 			}
 
-			// Just an arg?
-			if standalone {
-				// Short-circuit if we come across a separator.
-				if key == b"--" { break; }
+			match KeyKind::from(key) {
+				KeyKind::None => {
+					if key == b"--" { break; } // Stop on separator.
 
-				idx += 1;
-				args.push(key);
-			}
-			// Do key and/or value stuff!
-			else {
-				keys.push(idx);
+					args.push(a);
+					idx += 1;
+				},
+				KeyKind::Short => {
+					if key == b"-V" { flags |= FLAG_HAS_VERSION; }
+					else if key == b"-h" { flags |= FLAG_HAS_HELP; }
 
-				match value {
-					Some(v) => {
-						last = idx + 1;
-						idx += 2;
-						args.push(key);
-						args.push(v);
-					},
-					None => {
-						match key.as_slice() {
-							b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
-							b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
-							_ => {},
-						}
+					args.push(a);
+					last = idx;
+					idx += 1;
+				},
+				KeyKind::Long => {
+					if key == b"--version" { flags |= FLAG_HAS_VERSION; }
+					else if key == b"--help" { flags |= FLAG_HAS_HELP; }
 
-						last = idx;
-						idx += 1;
-						args.push(key);
-					},
-				}
+					args.push(a);
+					last = idx;
+					idx += 1;
+				},
+				KeyKind::ShortV => {
+					let b = a.split_off(2);
+					args.push(a);
+					args.push(b);
+					last = idx + 1;
+					idx += 2;
+				},
+				KeyKind::LongV(end) => {
+					let b =
+						if end + 1 < key.len() { a.split_off(end + 1) }
+						else { Vec::new() };
+					a.truncate(end); // Chop off the equal sign.
+					args.push(a);
+					args.push(b);
+					last = idx + 1;
+					idx += 2;
+				},
 			}
 		}
 
 		// Turn it into an object!
 		Self {
 			args,
-			keys,
 			last: Cell::new(last),
 			flags,
 		}
@@ -312,7 +313,7 @@ impl Argue {
 			// There are no arguments.
 			if self.args.is_empty() {
 				// Required?
-				if 0 != self.flags & FLAG_REQUIRED {
+				if FLAG_REQUIRED == self.flags & FLAG_REQUIRED {
 					return Err(ArgyleError::Empty);
 				}
 			}
@@ -334,9 +335,9 @@ impl Argue {
 	fn help_flag(&self) -> Option<ArgyleError> {
 		if 0 != self.flags & FLAG_ANY_HELP {
 			// Help is requested!
-			if 0 != self.flags & FLAG_HAS_HELP || self.args[0] == b"help" {
+			if FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help" {
 				// Static help.
-				if 0 != self.flags & FLAG_HELP {
+				if FLAG_HELP == self.flags & FLAG_HELP {
 					return Some(ArgyleError::WantsHelp);
 				}
 
@@ -359,12 +360,9 @@ impl Argue {
 	fn help_flag(&self) -> Option<ArgyleError> {
 		if
 			0 != self.flags & FLAG_ANY_HELP &&
-			(0 != self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
-		{
-				return Some(ArgyleError::WantsHelp);
-		}
-
-		None
+			(FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
+		{ Some(ArgyleError::WantsHelp) }
+		else { None }
 	}
 
 	#[must_use]
@@ -491,7 +489,7 @@ impl Argue {
 	/// let switch: bool = args.switch(b"--my-switch");
 	/// ```
 	pub fn switch(&self, key: &[u8]) -> bool {
-		self.keys.iter().any(|&x| self.args[x] == key)
+		self.args.iter().any(|x| x == key)
 	}
 
 	#[must_use]
@@ -511,7 +509,7 @@ impl Argue {
 	/// let switch: bool = args.switch2(b"-s", b"--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
-		self.keys.iter().any(|&x| self.args[x] == short || self.args[x] == long)
+		self.args.iter().any(|x| x == short || x == long)
 	}
 
 	#[must_use]
@@ -571,7 +569,7 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option(b"--my-opt");
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
-		let idx = self.keys.iter().find(|&&x| self.args[x] == key)? + 1;
+		let idx = self.args.iter().position(|x| x == key)? + 1;
 		self.args.get(idx).map(|x| {
 			if idx > self.last.get() { self.last.set(idx); }
 			x.as_slice()
@@ -593,7 +591,7 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option2(b"-o", b"--my-opt");
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
-		let idx = self.keys.iter().find(|&&x| self.args[x] == short || self.args[x] == long)? + 1;
+		let idx = self.args.iter().position(|x| x == short || x == long)? + 1;
 		self.args.get(idx).map(|x| {
 			if idx > self.last.get() { self.last.set(idx); }
 			x.as_slice()
@@ -733,8 +731,9 @@ impl Argue {
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
 	fn arg_idx(&self) -> usize {
-		if self.keys.is_empty() && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.last.get() + 1 }
+		let last = self.last.get();
+		if 0 == last && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
+		else { last + 1 }
 	}
 }
 
@@ -823,6 +822,15 @@ mod tests {
 		assert_eq!(args.arg(1), Some(&b"World"[..]));
 		assert_eq!(args.arg(2), None);
 		assert_eq!(args.args(), trailing);
+
+		// If there are no keys, the first entry should also be the first
+		// argument.
+		args = [b"hello".to_vec()].into_iter().collect();
+		assert_eq!(args.first_arg(), Ok(&b"hello"[..]));
+
+		// Unless we're expecting a subcommand...
+		args.flags |= FLAG_SUBCOMMAND;
+		assert!(args.first_arg().is_err());
 	}
 
 	#[test]
