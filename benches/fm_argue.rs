@@ -2,7 +2,7 @@
 # Benchmark: `argyle::Argue`
 
 For best results, this should be called with additional runtime arguments, like:
-cargo bench --bench fm_argue -- --one val -tVal -k -v --apples
+cargo bench --bench fm_argue -- --one val -tVal -k -v --apples /foo/bar /bar/baz
 */
 
 use brunch::{
