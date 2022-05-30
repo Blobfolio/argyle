@@ -962,6 +962,48 @@ mod tests {
 	}
 
 	#[test]
+	fn t_with_list() {
+		let list = std::path::Path::new("skel/list.txt");
+		assert!(list.exists(), "Missing list.txt");
+
+		let mut base: Vec<Vec<u8>> = vec![
+			b"print".to_vec(),
+			b"-l".to_vec(),
+			b"skel/list.txt".to_vec(),
+		];
+
+		let mut args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/list.txt".to_vec(),
+				b"/foo/bar/one".to_vec(),
+				b"/foo/bar/two".to_vec(),
+				b"/foo/bar/three".to_vec(),
+			]
+		);
+
+		// These should be trailing args.
+		assert_eq!(args.arg(0), Some(&b"/foo/bar/one"[..]));
+		assert_eq!(args.arg(1), Some(&b"/foo/bar/two"[..]));
+		assert_eq!(args.arg(2), Some(&b"/foo/bar/three"[..]));
+
+		// Now try it with a bad file.
+		base[2] = b"skel/not-list.txt".to_vec();
+		args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/not-list.txt".to_vec(),
+			]
+		);
+	}
+
+	#[test]
 	fn t_bitflags() {
 		const FLAG_EMPTY: u8 =    0b0000_0001;
 		const FLAG_HELLO: u8 =    0b0000_0010;
