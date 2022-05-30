@@ -375,48 +375,26 @@ impl Argue {
 			else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
 				return Err(ArgyleError::WantsVersion);
 			}
-			// Check for help.
-			else if let Some(e) = self.help_flag() {
-				return Err(e);
+			// Help.
+			else if
+				0 != self.flags & FLAG_ANY_HELP &&
+				(FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
+			{
+				#[cfg(feature = "dynamic-help")]
+				if FLAG_DYNAMIC_HELP == self.flags & FLAG_DYNAMIC_HELP {
+					return Err(ArgyleError::WantsDynamicHelp(
+						if self.args[0][0] != b'-' && self.args[0] != b"help" {
+							Some(Box::from(self.args[0].as_slice()))
+						}
+						else { None }
+					));
+				}
+
+				return Err(ArgyleError::WantsHelp);
 			}
 		}
 
 		Ok(())
-	}
-
-	#[cfg(feature = "dynamic-help")]
-	/// # Handle Help.
-	fn help_flag(&self) -> Option<ArgyleError> {
-		if 0 != self.flags & FLAG_ANY_HELP {
-			// Help is requested!
-			if FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help" {
-				// Static help.
-				if FLAG_HELP == self.flags & FLAG_HELP {
-					return Some(ArgyleError::WantsHelp);
-				}
-
-				// Dynamic help.
-				return Some(ArgyleError::WantsDynamicHelp(
-					if ! self.args[0].is_empty() && self.args[0][0] != b'-' && self.args[0] != b"help" {
-						Some(self.args[0].clone().into_boxed_slice())
-					}
-					else { None }
-				));
-			}
-		}
-
-		None
-	}
-
-	#[cfg(not(feature = "dynamic-help"))]
-	#[inline]
-	/// # Handle Help.
-	fn help_flag(&self) -> Option<ArgyleError> {
-		if
-			0 != self.flags & FLAG_ANY_HELP &&
-			(FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
-		{ Some(ArgyleError::WantsHelp) }
-		else { None }
 	}
 
 	#[must_use]
