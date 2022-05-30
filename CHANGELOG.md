@@ -2,7 +2,7 @@
 
 
 
-## [0.6.0](https://github.com/Blobfolio/argyle/releases/tag/v0.6.0) - TBD
+## [0.6.0](https://github.com/Blobfolio/argyle/releases/tag/v0.6.0) - 2022-05-30
 
 All arguments held by `Argue` are now stored as owned bytes (no more `Cow`). This will be a little slower than previous releases, but safer, as the state can now be maintained in the (unlikely) event the environment is later mutated.
 
@@ -15,7 +15,7 @@ Other changes to note:
 * `Argue::peek`, `Argue::peek_unchecked` have been removed (in favor of conventional indexing; see next two lines)
 * `Argue` now implements `std::ops::Index`
 * New: `Argue::get`, `Argue::is_empty`, `Argue::len`
-* `Argue::first_arg`, `Argue::first_arg_os` have been removed (just use `Argue::arg(0)`)
+* `Argue::first_arg`, `Argue::first_arg_os` have been removed (use `Argue::arg(0)` instead)
 
 
 
