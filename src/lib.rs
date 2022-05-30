@@ -4,11 +4,11 @@
 [![Documentation](https://docs.rs/argyle/badge.svg)](https://docs.rs/argyle/)
 [![crates.io](https://img.shields.io/crates/v/argyle.svg)](https://crates.io/crates/argyle)
 
-This crate contains an agnostic CLI argument parser called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments into a consistent state so the implementor can query them as needed.
+This crate contains an agnostic CLI argument parser for Unix platforms called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments ([`std::env::args_os`]) into a consistent state so the implementor can query them as needed.
 
 Post-processing is an exercise largely left to the implementing library to do in its own way, in its own time. [`Argue`] exposes several methods for quickly querying the individual pieces of the set, but it can also be dereferenced to a slice or consumed into an owned vector for fully manual processing if desired.
 
-Arguments are processed and held as bytes — `Cow<'static, [u8]>` — rather than (os)strings, again leaving the choice of later conversion entirely up to the implementor. For non-Musl Linux systems, this is almost entirely non-allocating as CLI arguments map directly back to the `CStr` pointers. For other systems, [`Argue`] falls back to [`std::env::args_os`], so requires a bit more allocation.
+Arguments are processed and held as bytes rather than (os)strings, again leaving the choice of later conversion entirely up to the implementor.
 
 For simple applications, this agnostic approach can significantly reduce the overhead of processing CLI arguments, but because handling is left to the implementing library, it might be too tedious or limiting for more complex use cases.
 
@@ -20,7 +20,7 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```ignore
 [dependencies]
-argyle = "0.5.*"
+argyle = "0.6.*"
 ```
 
 

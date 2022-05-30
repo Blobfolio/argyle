@@ -2,38 +2,27 @@
 # Argyle: Argue
 */
 
-#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
-mod argv;
-
-
-
 use crate::{
 	ArgyleError,
 	ArgsOsStr,
 	KeyKind,
 };
 use std::{
-	borrow::Cow,
 	cell::Cell,
-	ffi::OsStr,
+	ffi::{
+		OsStr,
+		OsString,
+	},
 	ops::{
 		BitOr,
 		Deref,
+		Index,
 	},
-	os::unix::ffi::OsStrExt,
+	os::unix::ffi::{
+		OsStrExt,
+		OsStringExt,
+	},
 };
-
-
-
-/// # Key/Value Iterator Item.
-///
-/// The bool indicates whether or not this was a miscellaneous argument (i.e.
-/// not a key).
-///
-/// The middle value is either said argument or the key.
-///
-/// The third item is the attached value, if any.
-type KvIterItem = (bool, Cow<'static, [u8]>, Option<Cow<'static, [u8]>>);
 
 
 
@@ -103,19 +92,14 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 
 
 
-/// # The size of our keys array.
-const KEY_SIZE: usize = 16;
-/// # The index noting total key length.
-const KEY_LEN: usize = 15;
-
-
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// `Argue` is an agnostic CLI argument parser. Unlike more robust libraries
 /// like [clap](https://crates.io/crates/clap), `Argue` does not hold
 /// information about expected or required arguments; it merely parses the raw
 /// arguments into a consistent state so the implementor can query them as
 /// needed.
+///
+/// (It is effectively a wrapper around [`std::env::args_os`].)
 ///
 /// Post-processing is an exercise largely left to the implementing library to
 /// do in its own way, in its own time. `Argue` exposes several methods for
@@ -123,12 +107,9 @@ const KEY_LEN: usize = 15;
 /// dereferenced to a slice or consumed into an owned vector for fully manual
 /// processing if desired.
 ///
-/// Arguments are processed and held as bytes — `Cow<'static, [u8]>` — rather
-/// than (os)strings, again leaving the choice of later conversion entirely up
-/// to the implementor. For non-Musl Linux systems, this is almost entirely
-/// non-allocating as CLI arguments map directly back to the `CStr` pointers.
-/// For other systems, `Argue` falls back to [`std::env::args_os`], so requires
-/// a bit more allocation.
+/// Arguments are processed and held as owned bytes rather than (os)strings,
+/// again leaving the choice of later conversion entirely up to the
+/// implementor.
 ///
 /// For simple applications, this agnostic approach can significantly reduce
 /// the overhead of processing CLI arguments, but because handling is left to
@@ -170,10 +151,7 @@ const KEY_LEN: usize = 15;
 /// ### Restrictions
 ///
 /// 1. Keys are not checked for uniqueness, but only the first occurrence of a given key will ever match.
-/// 2. A given argument set may only include up to **15** keys. If that number is exceeded, `Argue` will print an error and terminate the thread with a status code of `1`.
-/// 3. The total number of keys, values, and arguments may not exceed `u16::MAX`.
-/// 4. A glued `--key=Val` expression cannot be longer than `u16::MAX` bytes.
-/// 5. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
+/// 2. Argument parsing stops if a passthrough separator `--` is found. Anything up to that point is parsed as usual; everything after is discarded.
 ///
 /// ## Examples
 ///
@@ -181,7 +159,6 @@ const KEY_LEN: usize = 15;
 /// ends tucked away as flags.
 ///
 /// ```no_run
-/// use std::borrow::Cow;
 /// use argyle::{Argue, FLAG_REQUIRED};
 ///
 /// // Parse the env arguments, aborting if the set is empty.
@@ -190,31 +167,24 @@ const KEY_LEN: usize = 15;
 /// // Check to see what's there.
 /// let switch: bool = args.switch(b"-s");
 /// let option: Option<&[u8]> = args.option(b"--my-opt");
-/// let extras: &[Cow<'static, [u8]>] = args.args();
+/// let extras: &[Vec<u8>] = args.args();
 /// ```
 ///
 /// If you just want a clean set to iterate over, `Argue` can be dereferenced
 /// to a slice:
 ///
 /// ```ignore
-/// let arg_slice: &[Cow<'static, [u8]>] = *args;
+/// let arg_slice: &[Vec<u8>] = &args;
 /// ```
 ///
 /// Or it can be converted into an owned Vector:
 /// ```ignore
-/// let args: Vec<Cow<'static, [u8]>> = args.take();
+/// let args: Vec<Vec<u8>> = args.take();
 /// ```
 pub struct Argue {
 	/// Parsed arguments.
-	args: Vec<Cow<'static, [u8]>>,
-	/// Keys.
-	///
-	/// This array holds the key indexes (from `self.args`) so checks can avoid
-	/// re-evaluation, etc.
-	///
-	/// The last slot holds the number of keys, hence only 15 total keys are
-	/// supported.
-	keys: [u16; KEY_SIZE],
+	args: Vec<Vec<u8>>,
+
 	/// Highest non-arg index.
 	///
 	/// This is used to divide the arguments between named and trailing values.
@@ -225,79 +195,165 @@ pub struct Argue {
 	/// The only way `Argue` knows switches from options is by the method
 	/// invoked by the implementing library. Be sure to request all options
 	/// before asking for trailing arguments.
-	last: Cell<u16>,
+	last: Cell<usize>,
+
 	/// Flags.
 	flags: u8,
 }
 
-impl Default for Argue {
-	#[inline]
-	fn default() -> Self {
-		Self {
-			args: Vec::with_capacity(KEY_SIZE),
-			keys: [0_u16; KEY_SIZE],
-			last: Cell::new(0),
-			flags: 0,
-		}
-	}
-}
-
 impl Deref for Argue {
-	type Target = [Cow<'static, [u8]>];
+	type Target = [Vec<u8>];
 	#[inline]
 	fn deref(&self) -> &Self::Target { &self.args }
 }
 
+impl<'a> FromIterator<&'a [u8]> for Argue {
+	fn from_iter<I: IntoIterator<Item = &'a [u8]>>(src: I) -> Self {
+		src.into_iter().map(<[u8]>::to_vec).collect()
+	}
+}
+
+impl FromIterator<Vec<u8>> for Argue {
+	fn from_iter<I: IntoIterator<Item = Vec<u8>>>(src: I) -> Self {
+		src.into_iter().map(OsString::from_vec).collect()
+	}
+}
+
+impl FromIterator<OsString> for Argue {
+	fn from_iter<I: IntoIterator<Item = OsString>>(src: I) -> Self {
+		let mut args: Vec<Vec<u8>> = Vec::with_capacity(16);
+		let mut last = 0_usize;
+		let mut flags = 0_u8;
+		let mut idx = 0_usize;
+
+		for a in src {
+			let mut a = a.into_vec();
+			let key: &[u8] = a.as_slice();
+
+			// Skip leading empties.
+			if 0 == idx && (key.is_empty() || key.iter().all(u8::is_ascii_whitespace)) {
+				continue;
+			}
+
+			match KeyKind::from(key) {
+				KeyKind::None => {
+					if key == b"--" { break; } // Stop on separator.
+
+					args.push(a);
+					idx += 1;
+				},
+				KeyKind::Short => {
+					if key == b"-V" { flags |= FLAG_HAS_VERSION; }
+					else if key == b"-h" { flags |= FLAG_HAS_HELP; }
+
+					args.push(a);
+					last = idx;
+					idx += 1;
+				},
+				KeyKind::Long => {
+					if key == b"--version" { flags |= FLAG_HAS_VERSION; }
+					else if key == b"--help" { flags |= FLAG_HAS_HELP; }
+
+					args.push(a);
+					last = idx;
+					idx += 1;
+				},
+				KeyKind::ShortV => {
+					let b = a.split_off(2);
+					args.push(a);
+					args.push(b);
+					last = idx + 1;
+					idx += 2;
+				},
+				KeyKind::LongV(end) => {
+					let b =
+						if end + 1 < key.len() { a.split_off(end + 1) }
+						else { Vec::new() };
+					a.truncate(end); // Chop off the equal sign.
+					args.push(a);
+					args.push(b);
+					last = idx + 1;
+					idx += 2;
+				},
+			}
+		}
+
+		// Turn it into an object!
+		Self {
+			args,
+			last: Cell::new(last),
+			flags,
+		}
+	}
+}
+
+impl Index<usize> for Argue {
+	type Output = [u8];
+
+	#[inline]
+	/// # Argument by Index.
+	///
+	/// This returns the nth CLI argument, which could be a subcommand, key,
+	/// value, or trailing argument.
+	///
+	/// If you're only interested in trailing arguments, use [`Argue::arg`]
+	/// instead.
+	///
+	/// If you want everything, you can alternatively dereference [`Argue`]
+	/// into a slice.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the index is out of range. Use [`Argue::len`] to
+	/// confirm the length ahead of time, or [`Argue::get`], which wraps the
+	/// answer in an `Option` instead of panicking.
+	fn index(&self, idx: usize) -> &Self::Output { &self.args[idx] }
+}
+
 /// ## Instantiation and Builder Patterns.
 impl Argue {
-	#[cfg(all(not(miri), target_os = "linux", not(target_env = "musl")))]
+	#[inline]
 	/// # New Instance.
-	///
-	/// For non-musl Linux targets, this populates arguments from the
-	/// environment by hooking directly into `argv`, avoiding unnecessary
-	/// allocations.
-	///
-	/// For other Unix systems, this simply parses the owned output of
-	/// [`std::env::args_os`].
-	///
-	/// The first (command path) argument is always excluded.
-	///
-	/// ## Errors
-	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::Argue;
-	///
-	/// let args = Argue::new(0);
-	/// ```
-	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		let mut out = kv_argue(argv::Args::default().map(kv_ref_adapter))?;
-		out.check_flags(flags)?;
-		Ok(out)
-	}
-
-	#[cfg(any(miri, not(target_os = "linux"), target_env = "musl"))]
-	/// # New Instance (Fallback Version).
 	///
 	/// This simply parses the owned output of [`std::env::args_os`].
 	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::{Argue, ArgyleError, FLAG_VERSION};
+	///
+	/// // Parse, but abort if -V/--version is present.
+	/// let args = match Argue::new(FLAG_VERSION) {
+	///     Ok(a) => a, // No abort.
+	///     // The version flags were present.
+	///     Err(ArgyleError::WantsVersion) => {
+	///         println!("MyApp v{}", env!("CARGO_PKG_VERSION"));
+	///         return;
+	///     },
+	///     // This probably won't happen with only FLAG_VERSION set, but just
+	///     // in case…
+	///     Err(e) => {
+	///         println!("Error: {}", e);
+	///         return;
+	///     },
+	/// };
+	///
+	/// // If we're here, check whatever random args your program needs.
+	/// let quiet: bool = args.switch(b"-q");
+	/// let foo: Option<&[u8]> = args.option2(b"-f", b"--foo");
+	/// ```
+	///
 	/// ## Errors
 	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	pub fn new(flags: u8) -> Result<Self, ArgyleError> {
-		use std::os::unix::ffi::OsStringExt;
-
-		let mut out = kv_argue(
-			std::env::args_os()
-				.skip(1)
-				.map(|x| kv_adapter(x.into_vec()))
-		)?;
-		out.check_flags(flags)?;
+	/// This method's result may represent an actual error, or some form of
+	/// abort, such as the presence of `-V`/`--version` when `FLAG_VERSION`
+	/// was passed to the constructor.
+	///
+	/// Generally you'd want to match the specific [`ArgyleError`] variant to
+	/// make sure you're taking the appropriate action.
+	pub fn new(chk_flags: u8) -> Result<Self, ArgyleError> {
+		let mut out: Self = std::env::args_os().skip(1).collect();
+		out.check_flags(chk_flags)?;
 		Ok(out)
 	}
 
@@ -305,107 +361,40 @@ impl Argue {
 	///
 	/// This is run after [`Argue::new`] to see what's what.
 	fn check_flags(&mut self, flags: u8) -> Result<(), ArgyleError> {
-		self.flags |= flags;
+		if 0 < flags {
+			self.flags |= flags;
 
-		// There are no arguments.
-		if self.args.is_empty() {
-			// Required?
-			if 0 != self.flags & FLAG_REQUIRED {
-				return Err(ArgyleError::Empty);
+			// There are no arguments.
+			if self.args.is_empty() {
+				// Required?
+				if FLAG_REQUIRED == self.flags & FLAG_REQUIRED {
+					return Err(ArgyleError::Empty);
+				}
 			}
-		}
-		// Print version.
-		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
-			return Err(ArgyleError::WantsVersion);
-		}
-		// Check for help.
-		else if let Some(e) = self.help_flag() {
-			return Err(e);
+			// Print version.
+			else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
+				return Err(ArgyleError::WantsVersion);
+			}
+			// Help.
+			else if
+				0 != self.flags & FLAG_ANY_HELP &&
+				(FLAG_HAS_HELP == self.flags & FLAG_HAS_HELP || self.args[0] == b"help")
+			{
+				#[cfg(feature = "dynamic-help")]
+				if FLAG_DYNAMIC_HELP == self.flags & FLAG_DYNAMIC_HELP {
+					return Err(ArgyleError::WantsDynamicHelp(
+						if self.args[0][0] != b'-' && self.args[0] != b"help" {
+							Some(Box::from(self.args[0].as_slice()))
+						}
+						else { None }
+					));
+				}
+
+				return Err(ArgyleError::WantsHelp);
+			}
 		}
 
 		Ok(())
-	}
-
-	#[deprecated(since = "0.5.5", note = "set flags during Argue::new")]
-	/// # With Flags.
-	///
-	/// This method can be used to set additional parsing options in cases
-	/// where the struct was initialized without calling [`Argue::new`].
-	///
-	/// This will only ever enable flags; it will not disable existing flags.
-	///
-	/// ## Errors
-	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::{Argue, FLAG_REQUIRED};
-	///
-	/// let args = Argue::new(0).unwrap().with_flags(FLAG_REQUIRED);
-	/// ```
-	pub fn with_flags(mut self, flags: u8) -> Result<Self, ArgyleError> {
-		self.flags |= flags;
-
-		// There are no arguments.
-		if self.args.is_empty() {
-			// Required?
-			if 0 != self.flags & FLAG_REQUIRED {
-				return Err(ArgyleError::Empty);
-			}
-		}
-		// Print version.
-		else if FLAG_DO_VERSION == self.flags & FLAG_DO_VERSION {
-			return Err(ArgyleError::WantsVersion);
-		}
-		// Check for help.
-		else if let Some(e) = self.help_flag() {
-			return Err(e);
-		}
-
-		Ok(self)
-	}
-
-	#[cfg(feature = "dynamic-help")]
-	/// # Handle Help.
-	fn help_flag(&self) -> Option<ArgyleError> {
-		if 0 != self.flags & FLAG_ANY_HELP {
-			let cmd = self.args[0].as_ref();
-
-			// Help is requested!
-			if 0 != self.flags & FLAG_HAS_HELP || cmd == b"help" {
-				// Static help.
-				if 0 != self.flags & FLAG_HELP {
-					return Some(ArgyleError::WantsHelp);
-				}
-
-				// Dynamic help.
-				return Some(ArgyleError::WantsDynamicHelp(
-					if ! cmd.is_empty() && cmd[0] != b'-' && cmd != b"help" {
-						Some(Box::from(cmd))
-					}
-					else { None }
-				));
-			}
-		}
-
-		None
-	}
-
-	#[cfg(not(feature = "dynamic-help"))]
-	#[inline]
-	/// # Handle Help.
-	fn help_flag(&self) -> Option<ArgyleError> {
-		if
-			0 != self.flags & FLAG_ANY_HELP &&
-			(0 != self.flags & FLAG_HAS_HELP || self.args[0].as_ref() == b"help")
-		{
-				return Some(ArgyleError::WantsHelp);
-		}
-
-		None
 	}
 
 	#[must_use]
@@ -437,7 +426,7 @@ impl Argue {
 			for line in raw.lines() {
 				let bytes = line.trim().as_bytes();
 				if ! bytes.is_empty() {
-					self.args.push(Cow::Owned(bytes.to_vec()));
+					self.args.push(bytes.to_vec());
 				}
 			}
 		}
@@ -456,7 +445,7 @@ impl Argue {
 	/// # Into Owned Vec.
 	///
 	/// Use this method to consume the struct and return the parsed arguments
-	/// as a `Vec<Cow<[u8]>>`.
+	/// as a `Vec<Vec<u8>>`.
 	///
 	/// If you merely want something to iterate over, you can alternatively
 	/// dereference the struct to a string slice.
@@ -465,59 +454,16 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
-	/// use std::borrow::Cow;
 	///
-	/// let args: Vec<Cow<[u8]>> = Argue::new(0).unwrap().take();
+	/// let args: Vec<Vec<u8>> = Argue::new(0).unwrap().take();
 	/// ```
-	pub fn take(self) -> Vec<Cow<'static, [u8]>> { self.args }
+	pub fn take(self) -> Vec<Vec<u8>> { self.args }
 }
 
 /// ## Queries.
 ///
 /// These methods allow data to be questioned and extracted.
 impl Argue {
-	#[must_use]
-	#[inline]
-	/// # First Entry.
-	///
-	/// Borrow the first entry, if any.
-	///
-	/// ## Examples
-	///
-	/// ```ignore
-	/// use argyle::Argue;
-	///
-	/// let mut args = Argue::new(0);
-	///
-	/// if let Some("happy") = args.peek() { ... }
-	/// ```
-	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Cow::as_ref) }
-
-	#[allow(unsafe_code)]
-	#[must_use]
-	#[inline]
-	/// # First Entry.
-	///
-	/// Borrow the first entry without first checking for its existence.
-	///
-	/// ## Safety
-	///
-	/// This assumes a first argument exists; it will panic if the set is
-	/// empty.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::{Argue, FLAG_REQUIRED};
-	///
-	/// let args = Argue::new(FLAG_REQUIRED).unwrap();
-	///
-	/// // This is actually safe because FLAG_REQUIRED would have errored out
-	/// // if nothing were present.
-	/// let first: &[u8] = unsafe { args.peek_unchecked() };
-	/// ```
-	pub unsafe fn peek_unchecked(&self) -> &[u8] { self.args[0].as_ref() }
-
 	#[must_use]
 	#[inline]
 	/// # Switch.
@@ -533,10 +479,7 @@ impl Argue {
 	/// let switch: bool = args.switch(b"--my-switch");
 	/// ```
 	pub fn switch(&self, key: &[u8]) -> bool {
-		self.keys.iter()
-			.take(self.num_keys())
-			.map(|x| &self.args[*x as usize])
-			.any(|x| x.as_ref().eq(key))
+		self.args.iter().any(|x| x == key)
 	}
 
 	#[must_use]
@@ -556,13 +499,7 @@ impl Argue {
 	/// let switch: bool = args.switch2(b"-s", b"--my-switch");
 	/// ```
 	pub fn switch2(&self, short: &[u8], long: &[u8]) -> bool {
-		self.keys.iter()
-			.take(self.num_keys())
-			.map(|x| &self.args[*x as usize])
-			.any(|x| {
-				let xr = x.as_ref();
-				xr.eq(short) || xr.eq(long)
-			})
+		self.args.iter().any(|x| x == short || x == long)
 	}
 
 	#[must_use]
@@ -622,16 +559,8 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option(b"--my-opt");
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
-		self.keys.iter()
-			.take(self.num_keys())
-			.position(|&x| self.args.get(x as usize).map_or(false, |x| x.as_ref().eq(key)))
-			.and_then(|idx| {
-				let idx = self.keys[idx] + 1;
-				self.args.get(idx as usize).map(|x| {
-					if idx > self.last.get() { self.last.set(idx); }
-					x.as_ref()
-				})
-			})
+		let idx = self.args.iter().position(|x| x == key)? + 1;
+		self._option(idx)
 	}
 
 	/// # Option x2.
@@ -649,19 +578,21 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option2(b"-o", b"--my-opt");
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
-		self.keys.iter()
-			.take(self.num_keys())
-			.position(|&x| self.args.get(x as usize).map_or(false, |x| {
-				let xr = x.as_ref();
-				xr.eq(short) || xr.eq(long)
-			}))
-			.and_then(|idx| {
-				let idx = self.keys[idx] + 1;
-				self.args.get(idx as usize).map(|x| {
-					if idx > self.last.get() { self.last.set(idx); }
-					x.as_ref()
-				})
-			})
+		let idx = self.args.iter().position(|x| x == short || x == long)? + 1;
+		self._option(idx)
+	}
+
+	/// # Return Option at Index.
+	///
+	/// This method holds the common code for [`Argue::option`] and
+	/// [`Argue::option2`]. It returns the argument at the index they find,
+	/// nudging the options/args boundary upward if needed.
+	///
+	/// This will return `None` if the index is out of range.
+	fn _option(&self, idx: usize) -> Option<&[u8]> {
+		let arg = self.args.get(idx)?;
+		if self.last.get() < idx { self.last.set(idx); }
+		Some(arg.as_slice())
 	}
 
 	#[must_use]
@@ -680,16 +611,13 @@ impl Argue {
 	///
 	/// ```no_run
 	/// use argyle::Argue;
-	/// use std::borrow::Cow;
 	///
 	/// let mut args = Argue::new(0).unwrap();
-	/// let extras: &[Cow<[u8]>] = args.args();
+	/// let extras: &[Vec<u8>] = args.args();
 	/// ```
-	pub fn args(&self) -> &[Cow<'static, [u8]>] {
+	pub fn args(&self) -> &[Vec<u8>] {
 		let idx = self.arg_idx();
-		if idx < self.args.len() {
-			&self.args[self.arg_idx()..]
-		}
+		if idx < self.args.len() { &self.args[idx..] }
 		else { &[] }
 	}
 
@@ -703,42 +631,37 @@ impl Argue {
 	/// argument of any kind, which could be a subcommand or key.
 	pub fn arg(&self, idx: usize) -> Option<&[u8]> {
 		let start_idx = self.arg_idx();
-		if start_idx + idx < self.args.len() {
-			Some(self.args[start_idx + idx].as_ref())
-		}
-		else { None }
+		self.args.get(start_idx + idx).map(Vec::as_slice)
+	}
+}
+
+/// ## Misc Indexing.
+impl Argue {
+	#[must_use]
+	/// # Get Argument.
+	///
+	/// This is the non-panicking way to index into a specific subcommand, key,
+	/// value, etc. It will be returned if it exists, otherwise you'll get `None`
+	/// if the index is out of range.
+	///
+	/// If you _know_ the index is valid, you can leverage the `std::ops::Index`
+	/// trait to fetch the value directly.
+	pub fn get(&self, idx: usize) -> Option<&[u8]> {
+		self.args.get(idx).map(Vec::as_slice)
 	}
 
-	/// # First Trailing Argument.
+	#[inline]
+	#[must_use]
+	/// # Is Empty?
+	pub fn is_empty(&self) -> bool { self.args.is_empty() }
+
+	#[inline]
+	#[must_use]
+	/// # Length.
 	///
-	/// Return the first trailing argument, or print an error and exit the
-	/// thread if there isn't one.
-	///
-	/// As with other arg-related methods, it is important to query all options
-	/// first, as that helps the struct determine the boundary between named
-	/// and unnamed values.
-	///
-	/// ## Errors
-	///
-	/// This method will return an error if there is no first argument.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::Argue;
-	///
-	/// let mut args = Argue::new(0).unwrap();
-	/// let opt: &[u8] = args.first_arg().unwrap();
-	/// ```
-	pub fn first_arg(&self) -> Result<&[u8], ArgyleError> {
-		let idx = self.arg_idx();
-		if idx >= self.args.len() {
-			Err(ArgyleError::NoArg)
-		}
-		else {
-			Ok(self.args[idx].as_ref())
-		}
-	}
+	/// Return the length of all the arguments (keys, values, etc.) held by
+	/// the instance.
+	pub fn len(&self) -> usize { self.args.len() }
 }
 
 /// # `OsStr` Methods.
@@ -766,9 +689,7 @@ impl Argue {
 	///
 	/// This works just like [`Argue::args`], except it returns an iterator
 	/// that yields [`OsStr`](std::ffi::OsStr) instead of bytes.
-	pub fn args_os(&self) -> ArgsOsStr {
-		ArgsOsStr::new(self.args())
-	}
+	pub fn args_os(&self) -> ArgsOsStr { ArgsOsStr::new(self.args()) }
 
 	#[must_use]
 	/// # Arg at Index as `OsStr`.
@@ -778,23 +699,10 @@ impl Argue {
 	pub fn arg_os(&self, idx: usize) -> Option<&OsStr> {
 		self.arg(idx).map(OsStr::from_bytes)
 	}
-
-	/// # First Trailing Argument as `OsStr`
-	///
-	/// This works just like [`Argue::first_arg`] except it returns the value
-	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
-	///
-	/// ## Errors
-	///
-	/// This method will return an error if there is no first argument.
-	pub fn first_arg_os(&self) -> Result<&OsStr, ArgyleError> {
-		self.first_arg().map(OsStr::from_bytes)
-	}
 }
 
 /// ## Internal Helpers.
 impl Argue {
-	#[inline]
 	/// # Arg Index.
 	///
 	/// This is an internal method that returns the index at which the first
@@ -802,142 +710,10 @@ impl Argue {
 	///
 	/// Note: the index may be out of range, but won't be used in that case.
 	fn arg_idx(&self) -> usize {
-		if self.keys[KEY_LEN] == 0 && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
-		else { self.last.get() as usize + 1 }
+		let last = self.last.get();
+		if 0 == last && 0 == self.flags & FLAG_SUBCOMMAND { 0 }
+		else { last + 1 }
 	}
-
-	#[inline]
-	/// # Num Keys.
-	const fn num_keys(&self) -> usize { self.keys[KEY_LEN] as usize }
-}
-
-
-
-#[cfg(any(test, miri, not(target_os = "linux"), target_env = "musl"))]
-/// # Key/Value Iterator Adapter.
-///
-/// This parses and Cows _owned_ arguments in preparation for `kv_argue` to
-/// build an actual [`Argue`] instance.
-fn kv_adapter(mut src: Vec<u8>) -> KvIterItem {
-	match KeyKind::from(src.as_slice()) {
-		KeyKind::None => (true, Cow::Owned(src), None),
-		KeyKind::Short | KeyKind::Long => (false, Cow::Owned(src), None),
-		KeyKind::ShortV => {
-			let b = src.split_off(2);
-			(false, Cow::Owned(src), Some(Cow::Owned(b)))
-		},
-		KeyKind::LongV(x) => {
-			let end = x.get() as usize;
-			if end + 1 < src.len() {
-				let b = src.split_off(end + 1);
-				src.truncate(end);
-				(false, Cow::Owned(src), Some(Cow::Owned(b)))
-			}
-			else {
-				src.truncate(end);
-				(false, Cow::Owned(src), Some(Cow::Borrowed(&[])))
-			}
-		}
-	}
-}
-
-#[cfg(any(test, all(not(miri), target_os = "linux", not(target_env = "musl"))))]
-/// # Key/Value Iterator Adapter.
-///
-/// This parses and Cows _referenced_ arguments in preparation for `kv_argue`
-/// to build an actual [`Argue`] instance.
-fn kv_ref_adapter(src: &'static [u8]) -> KvIterItem {
-	match KeyKind::from(src) {
-		KeyKind::None => (true, Cow::Borrowed(src), None),
-		KeyKind::Short | KeyKind::Long => (false, Cow::Borrowed(src), None),
-		KeyKind::ShortV => {
-			let (a, b) = src.split_at(2);
-			(false, Cow::Borrowed(a), Some(Cow::Borrowed(b)))
-		},
-		KeyKind::LongV(x) => {
-			let end = x.get() as usize;
-			if end + 1 < src.len() {
-				(
-					false,
-					Cow::Borrowed(&src[..end]),
-					Some(Cow::Borrowed(&src[end + 1..])),
-				)
-			}
-			else {
-				(false, Cow::Borrowed(&src[..end]), Some(Cow::Borrowed(&[])))
-			}
-		}
-	}
-}
-
-/// # Argue From Key/Value Iterator.
-///
-/// This takes a (parsed) argument iterator and outputs a new [`Argue`]
-/// instance, unless the number of keys or args exceed the limits.
-fn kv_argue<T>(src: T) -> Result<Argue, ArgyleError>
-where T: Iterator<Item = KvIterItem> {
-	let mut args: Vec<Cow<[u8]>> = Vec::with_capacity(KEY_SIZE);
-	let mut keys = [0_u16; KEY_SIZE];
-	let mut last = 0_u16;
-	let mut idx = 0_u16;
-	let mut any = false;
-	let mut flags = 0_u8;
-
-	for (standalone, key, value) in src {
-		// Skip leading empties.
-		if ! any {
-			if key.is_empty() || key.iter().all(u8::is_ascii_whitespace) {
-				continue;
-			}
-			any = true;
-		}
-
-		// How many spots will this take up?
-		let inc: u16 =
-			if value.is_some() { 2 }
-			else if key.as_ref() == b"--" { break; }
-			else { 1 };
-
-		// Make sure we fit.
-		if u16::MAX - inc < idx {
-			return Err(ArgyleError::TooManyArgs);
-		}
-
-		// Just an arg?
-		if standalone { idx += inc; }
-		// Do key stuff!
-		else {
-			if value.is_none() {
-				match key.as_ref() {
-					b"-V" | b"--version" => { flags |= FLAG_HAS_VERSION; },
-					b"-h" | b"--help" => { flags |= FLAG_HAS_HELP; },
-					_ => {},
-				}
-			}
-
-			let num_keys = keys[KEY_LEN] as usize;
-			if num_keys == KEY_LEN {
-				return Err(ArgyleError::TooManyKeys);
-			}
-
-			keys[num_keys] = idx;
-			keys[KEY_LEN] += 1;
-
-			idx += inc;
-			last = idx - 1;
-		}
-
-		// Push the things.
-		args.push(key);
-		if let Some(v) = value { args.push(v); }
-	}
-
-	Ok(Argue {
-		args,
-		keys,
-		last: Cell::new(last),
-		flags,
-	})
 }
 
 
@@ -956,75 +732,89 @@ mod tests {
 			b"--key=Val",
 		];
 
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 
 		// Check the overall structure.
 		assert_eq!(
 			*args,
 			[
-				Cow::from(&b"hey"[..]),
-				Cow::from(&b"-k"[..]),
-				Cow::from(&b"Val"[..]),
-				Cow::from(&b"--empty"[..]),
-				Cow::from(vec![]),
-				Cow::from(&b"--key"[..]),
-				Cow::from(&b"Val"[..]),
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+				b"--empty".to_vec(),
+				vec![],
+				b"--key".to_vec(),
+				b"Val".to_vec(),
 			]
 		);
 
 		// Test the finders.
-		assert_eq!(args.peek(), Some(&b"hey"[..]));
+		assert_eq!(args.get(0), Some(&b"hey"[..]));
+
+		assert_eq!(&args[1], b"-k");
 		assert!(args.switch(b"-k"));
 		assert!(args.switch(b"--key"));
 		assert!(args.switch2(b"-k", b"--key"));
+
 		assert_eq!(args.option(b"--key"), Some(&b"Val"[..]));
 		assert_eq!(args.option2(b"-k", b"--key"), Some(&b"Val"[..]));
 		assert!(args.args().is_empty());
 
+		// These shouldn't exist.
+		assert!(! args.switch(b"-c"));
+		assert!(! args.switch2(b"-c", b"--copy"));
+		assert!(args.option(b"-c").is_none());
+		assert!(args.option2(b"-c", b"--copy").is_none());
+		assert!(args.get(100).is_none());
+
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 
 		// The whole thing again.
 		assert_eq!(
 			*args,
 			[
-				Cow::from(&b"--prefix"[..]),
-				Cow::from(&b"hey"[..]),
-				Cow::from(&b"-k"[..]),
-				Cow::from(&b"Val"[..]),
-				Cow::from(&b"--empty"[..]),
-				Cow::from(vec![]),
-				Cow::from(&b"--key"[..]),
-				Cow::from(&b"Val"[..]),
+				b"--prefix".to_vec(),
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+				b"--empty".to_vec(),
+				vec![],
+				b"--key".to_vec(),
+				b"Val".to_vec(),
 			]
 		);
 
-		assert_eq!(args.peek(), Some(&b"--prefix"[..]));
+		assert_eq!(args.get(0), Some(&b"--prefix"[..]));
 		assert!(args.switch(b"--prefix"));
 		assert_eq!(args.option(b"--prefix"), Some(&b"hey"[..]));
 
-		// Something that doesn't exist.
-		assert_eq!(args.option(b"foo"), None);
+		// This is as good a place as any to double-check the _os version links
+		// up correctly.
+		let hey = OsStr::new("hey");
+		assert_eq!(args.option_os(b"--prefix"), Some(hey));
 
 		// Let's see what trailing args look like when there are none.
-		assert!(args.first_arg().is_err());
 		assert_eq!(args.arg(0), None);
 
 		// Let's also make sure the trailing arguments work too.
 		let trailing: &[&[u8]] = &[b"Hello", b"World"];
 		base.extend_from_slice(trailing);
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
-		assert_eq!(args.first_arg(), Ok(&b"Hello"[..]));
+		args = base.iter().copied().collect();
 		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
 		assert_eq!(args.arg(1), Some(&b"World"[..]));
 		assert_eq!(args.arg(2), None);
 		assert_eq!(args.args(), trailing);
 
-		// One last time: let's make sure extending from a vec works just like
-		// extending from slices.
-		let args2 = kv_argue(base.iter().map(|x| kv_adapter(x.to_vec()))).unwrap();
-		assert_eq!(*args, *args2);
+		// If there are no keys, the first entry should also be the first
+		// argument.
+		args = [b"hello".to_vec()].into_iter().collect();
+		assert_eq!(args.arg(0), Some(&b"hello"[..]));
+
+		// Unless we're expecting a subcommand...
+		args.flags |= FLAG_SUBCOMMAND;
+		assert!(args.arg(0).is_none());
 	}
 
 	#[test]
@@ -1035,7 +825,7 @@ mod tests {
 		];
 
 		// We should be wanting a version.
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 
 		assert!(matches!(
 			args.check_flags(FLAG_VERSION),
@@ -1043,32 +833,32 @@ mod tests {
 		));
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// Repeat with the long flag.
 		base[1] = b"--version";
 
 		// We should be wanting a version.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_VERSION),
 			Err(ArgyleError::WantsVersion)
 		));
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		// One last time without a version arg present.
 		base[1] = b"--ok";
 
 		// We should be wanting a version.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without the version flag.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 	}
 
@@ -1080,7 +870,7 @@ mod tests {
 		];
 
 		// We should be wanting a static help.
-		let mut args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let mut args: Argue = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1089,7 +879,7 @@ mod tests {
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			match args.check_flags(FLAG_DYNAMIC_HELP) {
 				Err(ArgyleError::WantsDynamicHelp(e)) => {
 					let expected: Option<Box<[u8]>> = Some(Box::from(&b"hey"[..]));
@@ -1100,14 +890,14 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Again with help flag first.
 		base[0] = b"--help";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1115,7 +905,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.check_flags(FLAG_DYNAMIC_HELP),
@@ -1124,7 +914,7 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// Same thing without wanting help.
@@ -1132,7 +922,7 @@ mod tests {
 		base[1] = b"--foo";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(matches!(
 			args.check_flags(FLAG_HELP),
 			Err(ArgyleError::WantsHelp)
@@ -1140,7 +930,7 @@ mod tests {
 
 		#[cfg(feature = "dynamic-help")]
 		{
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			// Dynamic help this time.
 			assert!(matches!(
 				args.check_flags(FLAG_DYNAMIC_HELP),
@@ -1149,26 +939,68 @@ mod tests {
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
 
 		// One last time with no helpish things.
 		base[0] = b"hey";
 
 		// We should be wanting a static help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_HELP).is_ok());
 
 		#[cfg(feature = "dynamic-help")]
 		{
 			// Dynamic help this time.
-			args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+			args = base.iter().copied().collect();
 			assert!(args.check_flags(FLAG_DYNAMIC_HELP).is_ok());
 		}
 
 		// Same thing without wanting help.
-		args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		args = base.iter().copied().collect();
 		assert!(args.check_flags(FLAG_VERSION).is_ok());
+	}
+
+	#[test]
+	fn t_with_list() {
+		let list = std::path::Path::new("skel/list.txt");
+		assert!(list.exists(), "Missing list.txt");
+
+		let mut base: Vec<Vec<u8>> = vec![
+			b"print".to_vec(),
+			b"-l".to_vec(),
+			b"skel/list.txt".to_vec(),
+		];
+
+		let mut args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/list.txt".to_vec(),
+				b"/foo/bar/one".to_vec(),
+				b"/foo/bar/two".to_vec(),
+				b"/foo/bar/three".to_vec(),
+			]
+		);
+
+		// These should be trailing args.
+		assert_eq!(args.arg(0), Some(&b"/foo/bar/one"[..]));
+		assert_eq!(args.arg(1), Some(&b"/foo/bar/two"[..]));
+		assert_eq!(args.arg(2), Some(&b"/foo/bar/three"[..]));
+
+		// Now try it with a bad file.
+		base[2] = b"skel/not-list.txt".to_vec();
+		args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/not-list.txt".to_vec(),
+			]
+		);
 	}
 
 	#[test]
@@ -1188,7 +1020,7 @@ mod tests {
 			b"--one-more",
 		];
 
-		let args = kv_argue(base.iter().copied().map(kv_ref_adapter)).unwrap();
+		let args: Argue = base.iter().copied().collect();
 		let flags: u8 = args.bitflags([
 			(&b"-k"[..], FLAG_K),
 			(&b"--empty"[..], FLAG_EMPTY),
@@ -1202,34 +1034,5 @@ mod tests {
 		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
 		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
 		assert_eq!(flags & FLAG_OTHER, 0);
-	}
-
-	#[test]
-	#[cfg_attr(miri, ignore)]
-	fn t_overflow() {
-		// Let's start with one-too-many elements.
-		let mut nope: Vec<&[u8]> = (0..65536_u32).into_iter()
-			.map(|_x| b"hi".as_slice())
-			.collect();
-
-		// We can't exceed u16::MAX elements.
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_err());
-
-		// This is an awful lot of arguments, but should fit now!
-		nope.pop();
-		assert_eq!(nope.len(), 65535);
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_ok());
-
-		// We also can't have more than 15 keys.
-		nope.truncate(0);
-		for _ in 0..16 {
-			nope.push(b"-h");
-		}
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_err());
-
-		// But if we remove one it should work.
-		nope.pop();
-		assert_eq!(nope.len(), 15);
-		assert!(kv_argue(nope.iter().copied().map(kv_ref_adapter)).is_ok());
 	}
 }
