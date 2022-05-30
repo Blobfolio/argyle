@@ -639,7 +639,7 @@ impl Argue {
 	/// ```
 	pub fn args(&self) -> &[Vec<u8>] {
 		let idx = self.arg_idx();
-		if idx < self.args.len() { &self.args[self.arg_idx()..] }
+		if idx < self.args.len() { &self.args[idx..] }
 		else { &[] }
 	}
 
