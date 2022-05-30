@@ -10,6 +10,13 @@ The total number of keys are no longer restricted. Similarly, individual argumen
 
 The different Unix implementations have all been merged together under the hood, so should now be more consistent across platforms. (This library is still _not_ compatible with Windows.)
 
+Other changes to note:
+
+* `Argue::peek`, `Argue::peek_unchecked` have been removed (in favor of conventional indexing; see next two lines)
+* `Argue` now implements `std::ops::Index`
+* New: `Argue::get`, `Argue::is_empty`, `Argue::len`
+* `Argue::first_arg`, `Argue::first_arg_os` have been removed (just use `Argue::arg(0)`)
+
 
 
 ## [0.5.6](https://github.com/Blobfolio/argyle/releases/tag/v0.5.6) - 2022-05-19

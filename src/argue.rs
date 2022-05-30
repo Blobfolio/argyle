@@ -16,6 +16,7 @@ use std::{
 	ops::{
 		BitOr,
 		Deref,
+		Index,
 	},
 	os::unix::ffi::{
 		OsStrExt,
@@ -286,6 +287,29 @@ impl FromIterator<OsString> for Argue {
 	}
 }
 
+impl Index<usize> for Argue {
+	type Output = [u8];
+
+	#[inline]
+	/// # Argument by Index.
+	///
+	/// This returns the nth CLI argument, which could be a subcommand, key,
+	/// value, or trailing argument.
+	///
+	/// If you're only interested in trailing arguments, use [`Argue::arg`]
+	/// instead.
+	///
+	/// If you want everything, you can alternatively dereference [`Argue`]
+	/// into a slice.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the index is out of range. Use [`Argue::len`] to
+	/// confirm the length ahead of time, or [`Argue::get`], which wraps the
+	/// answer in an `Option` instead of panicking.
+	fn index(&self, idx: usize) -> &Self::Output { &self.args[idx] }
+}
+
 /// ## Instantiation and Builder Patterns.
 impl Argue {
 	#[inline]
@@ -293,10 +317,40 @@ impl Argue {
 	///
 	/// This simply parses the owned output of [`std::env::args_os`].
 	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::{Argue, ArgyleError, FLAG_VERSION};
+	///
+	/// // Parse, but abort if -V/--version is present.
+	/// let args = match Argue::new(FLAG_VERSION) {
+	///     Ok(a) => a, // No abort.
+	///     // The version flags were present.
+	///     Err(ArgyleError::WantsVersion) => {
+	///         println!("MyApp v{}", env!("CARGO_PKG_VERSION"));
+	///         return;
+	///     },
+	///     // This probably won't happen with only FLAG_VERSION set, but just
+	///     // in case…
+	///     Err(e) => {
+	///         println!("Error: {}", e);
+	///         return;
+	///     },
+	/// };
+	///
+	/// // If we're here, check whatever random args your program needs.
+	/// let quiet: bool = args.switch(b"-q");
+	/// let foo: Option<&[u8]> = args.option2(b"-f", b"--foo");
+	/// ```
+	///
 	/// ## Errors
 	///
-	/// This method will bubble any processing errors or aborts (like the
-	/// discovery of version or help flags).
+	/// This method's result may represent an actual error, or some form of
+	/// abort, such as the presence of `-V`/`--version` when `FLAG_VERSION`
+	/// was passed to the constructor.
+	///
+	/// Generally you'd want to match the specific [`ArgyleError`] variant to
+	/// make sure you're taking the appropriate action.
 	pub fn new(chk_flags: u8) -> Result<Self, ArgyleError> {
 		let mut out: Self = std::env::args_os().skip(1).collect();
 		out.check_flags(chk_flags)?;
@@ -585,9 +639,7 @@ impl Argue {
 	/// ```
 	pub fn args(&self) -> &[Vec<u8>] {
 		let idx = self.arg_idx();
-		if idx < self.args.len() {
-			&self.args[self.arg_idx()..]
-		}
+		if idx < self.args.len() { &self.args[self.arg_idx()..] }
 		else { &[] }
 	}
 
@@ -601,11 +653,37 @@ impl Argue {
 	/// argument of any kind, which could be a subcommand or key.
 	pub fn arg(&self, idx: usize) -> Option<&[u8]> {
 		let start_idx = self.arg_idx();
-		if start_idx + idx < self.args.len() {
-			Some(&self.args[start_idx + idx])
-		}
-		else { None }
+		self.args.get(start_idx + idx).map(Vec::as_slice)
 	}
+}
+
+/// ## Misc Indexing.
+impl Argue {
+	#[must_use]
+	/// # Get Argument.
+	///
+	/// This is the non-panicking way to index into a specific subcommand, key,
+	/// value, etc. It will be returned if it exists, otherwise you'll get `None`
+	/// if the index is out of range.
+	///
+	/// If you _know_ the index is valid, you can leverage the `std::ops::Index`
+	/// trait to fetch the value directly.
+	pub fn get(&self, idx: usize) -> Option<&[u8]> {
+		self.args.get(idx).map(Vec::as_slice)
+	}
+
+	#[inline]
+	#[must_use]
+	/// # Is Empty?
+	pub fn is_empty(&self) -> bool { self.args.is_empty() }
+
+	#[inline]
+	#[must_use]
+	/// # Length.
+	///
+	/// Return the length of all the arguments (keys, values, etc.) held by
+	/// the instance.
+	pub fn len(&self) -> usize { self.args.len() }
 }
 
 /// # `OsStr` Methods.
@@ -633,9 +711,7 @@ impl Argue {
 	///
 	/// This works just like [`Argue::args`], except it returns an iterator
 	/// that yields [`OsStr`](std::ffi::OsStr) instead of bytes.
-	pub fn args_os(&self) -> ArgsOsStr {
-		ArgsOsStr::new(self.args())
-	}
+	pub fn args_os(&self) -> ArgsOsStr { ArgsOsStr::new(self.args()) }
 
 	#[must_use]
 	/// # Arg at Index as `OsStr`.
@@ -649,7 +725,6 @@ impl Argue {
 
 /// ## Internal Helpers.
 impl Argue {
-	#[inline]
 	/// # Arg Index.
 	///
 	/// This is an internal method that returns the index at which the first
@@ -685,24 +760,34 @@ mod tests {
 		assert_eq!(
 			*args,
 			[
-				b"hey"[..].to_vec(),
-				b"-k"[..].to_vec(),
-				b"Val"[..].to_vec(),
-				b"--empty"[..].to_vec(),
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+				b"--empty".to_vec(),
 				vec![],
-				b"--key"[..].to_vec(),
-				b"Val"[..].to_vec(),
+				b"--key".to_vec(),
+				b"Val".to_vec(),
 			]
 		);
 
 		// Test the finders.
-		assert_eq!(args.peek(), Some(&b"hey"[..]));
+		assert_eq!(args.get(0), Some(&b"hey"[..]));
+
+		assert_eq!(&args[1], b"-k");
 		assert!(args.switch(b"-k"));
 		assert!(args.switch(b"--key"));
 		assert!(args.switch2(b"-k", b"--key"));
+
 		assert_eq!(args.option(b"--key"), Some(&b"Val"[..]));
 		assert_eq!(args.option2(b"-k", b"--key"), Some(&b"Val"[..]));
 		assert!(args.args().is_empty());
+
+		// These shouldn't exist.
+		assert!(! args.switch(b"-c"));
+		assert!(! args.switch2(b"-c", b"--copy"));
+		assert!(args.option(b"-c").is_none());
+		assert!(args.option2(b"-c", b"--copy").is_none());
+		assert!(args.get(100).is_none());
 
 		// Let's test a first-position key.
 		base.insert(0, b"--prefix");
@@ -712,18 +797,18 @@ mod tests {
 		assert_eq!(
 			*args,
 			[
-				b"--prefix"[..].to_vec(),
-				b"hey"[..].to_vec(),
-				b"-k"[..].to_vec(),
-				b"Val"[..].to_vec(),
-				b"--empty"[..].to_vec(),
+				b"--prefix".to_vec(),
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+				b"--empty".to_vec(),
 				vec![],
-				b"--key"[..].to_vec(),
-				b"Val"[..].to_vec(),
+				b"--key".to_vec(),
+				b"Val".to_vec(),
 			]
 		);
 
-		assert_eq!(args.peek(), Some(&b"--prefix"[..]));
+		assert_eq!(args.get(0), Some(&b"--prefix"[..]));
 		assert!(args.switch(b"--prefix"));
 		assert_eq!(args.option(b"--prefix"), Some(&b"hey"[..]));
 
@@ -732,18 +817,13 @@ mod tests {
 		let hey = OsStr::new("hey");
 		assert_eq!(args.option_os(b"--prefix"), Some(hey));
 
-		// Something that doesn't exist.
-		assert_eq!(args.option(b"foo"), None);
-
 		// Let's see what trailing args look like when there are none.
-		assert!(args.first_arg().is_err());
 		assert_eq!(args.arg(0), None);
 
 		// Let's also make sure the trailing arguments work too.
 		let trailing: &[&[u8]] = &[b"Hello", b"World"];
 		base.extend_from_slice(trailing);
 		args = base.iter().copied().collect();
-		assert_eq!(args.first_arg(), Ok(&b"Hello"[..]));
 		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
 		assert_eq!(args.arg(1), Some(&b"World"[..]));
 		assert_eq!(args.arg(2), None);
@@ -752,11 +832,11 @@ mod tests {
 		// If there are no keys, the first entry should also be the first
 		// argument.
 		args = [b"hello".to_vec()].into_iter().collect();
-		assert_eq!(args.first_arg(), Ok(&b"hello"[..]));
+		assert_eq!(args.arg(0), Some(&b"hello"[..]));
 
 		// Unless we're expecting a subcommand...
 		args.flags |= FLAG_SUBCOMMAND;
-		assert!(args.first_arg().is_err());
+		assert!(args.arg(0).is_none());
 	}
 
 	#[test]
