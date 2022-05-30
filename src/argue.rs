@@ -434,48 +434,6 @@ impl Argue {
 impl Argue {
 	#[must_use]
 	#[inline]
-	/// # First Entry.
-	///
-	/// Borrow the first entry, if any.
-	///
-	/// ## Examples
-	///
-	/// ```ignore
-	/// use argyle::Argue;
-	///
-	/// let mut args = Argue::new(0);
-	///
-	/// if let Some("happy") = args.peek() { ... }
-	/// ```
-	pub fn peek(&self) -> Option<&[u8]> { self.args.get(0).map(Vec::as_slice) }
-
-	#[allow(unsafe_code)]
-	#[must_use]
-	#[inline]
-	/// # First Entry.
-	///
-	/// Borrow the first entry without first checking for its existence.
-	///
-	/// ## Safety
-	///
-	/// This assumes a first argument exists; it will panic if the set is
-	/// empty.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::{Argue, FLAG_REQUIRED};
-	///
-	/// let args = Argue::new(FLAG_REQUIRED).unwrap();
-	///
-	/// // This is actually safe because FLAG_REQUIRED would have errored out
-	/// // if nothing were present.
-	/// let first: &[u8] = unsafe { args.peek_unchecked() };
-	/// ```
-	pub unsafe fn peek_unchecked(&self) -> &[u8] { &self.args[0] }
-
-	#[must_use]
-	#[inline]
 	/// # Switch.
 	///
 	/// Returns `true` if the switch is present, `false` if not.
@@ -648,33 +606,6 @@ impl Argue {
 		}
 		else { None }
 	}
-
-	/// # First Trailing Argument.
-	///
-	/// Return the first trailing argument, or print an error and exit the
-	/// thread if there isn't one.
-	///
-	/// As with other arg-related methods, it is important to query all options
-	/// first, as that helps the struct determine the boundary between named
-	/// and unnamed values.
-	///
-	/// ## Errors
-	///
-	/// This method will return an error if there is no first argument.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use argyle::Argue;
-	///
-	/// let mut args = Argue::new(0).unwrap();
-	/// let opt: &[u8] = args.first_arg().unwrap();
-	/// ```
-	pub fn first_arg(&self) -> Result<&[u8], ArgyleError> {
-		let idx = self.arg_idx();
-		if idx >= self.args.len() { Err(ArgyleError::NoArg) }
-		else { Ok(&self.args[idx]) }
-	}
 }
 
 /// # `OsStr` Methods.
@@ -713,18 +644,6 @@ impl Argue {
 	/// [`OsStr`](std::ffi::OsStr) instead of bytes.
 	pub fn arg_os(&self, idx: usize) -> Option<&OsStr> {
 		self.arg(idx).map(OsStr::from_bytes)
-	}
-
-	/// # First Trailing Argument as `OsStr`
-	///
-	/// This works just like [`Argue::first_arg`] except it returns the value
-	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
-	///
-	/// ## Errors
-	///
-	/// This method will return an error if there is no first argument.
-	pub fn first_arg_os(&self) -> Result<&OsStr, ArgyleError> {
-		self.first_arg().map(OsStr::from_bytes)
 	}
 }
 
