@@ -570,10 +570,7 @@ impl Argue {
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
 		let idx = self.args.iter().position(|x| x == key)? + 1;
-		self.args.get(idx).map(|x| {
-			if idx > self.last.get() { self.last.set(idx); }
-			x.as_slice()
-		})
+		self._option(idx)
 	}
 
 	/// # Option x2.
@@ -592,10 +589,20 @@ impl Argue {
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
 		let idx = self.args.iter().position(|x| x == short || x == long)? + 1;
-		self.args.get(idx).map(|x| {
-			if idx > self.last.get() { self.last.set(idx); }
-			x.as_slice()
-		})
+		self._option(idx)
+	}
+
+	/// # Return Option at Index.
+	///
+	/// This method holds the common code for [`Argue::option`] and
+	/// [`Argue::option2`]. It returns the argument at the index they find,
+	/// nudging the options/args boundary upward if needed.
+	///
+	/// This will return `None` if the index is out of range.
+	fn _option(&self, idx: usize) -> Option<&[u8]> {
+		let arg = self.args.get(idx)?;
+		if self.last.get() < idx { self.last.set(idx); }
+		Some(arg.as_slice())
 	}
 
 	#[must_use]
