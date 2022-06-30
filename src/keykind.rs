@@ -5,7 +5,7 @@
 */
 
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
 /// The `KeyKind` enum is used to differentiate between the types of CLI argument
 /// keys [`Argue`](crate::Argue) might encounter during parsing (and `None` in the case of a
 /// non-key-looking entry).
@@ -17,6 +17,7 @@
 /// * If an entry begins with two `--` and an ASCII letter, it is assumed to be a long key.
 /// * If a long key contains an `=`, everything after that is assumed to be a value.
 pub enum KeyKind {
+	#[default]
 	/// Not a key.
 	None,
 	/// A short key.
@@ -28,11 +29,6 @@ pub enum KeyKind {
 	/// A long key with a value. The number indicates the position of the `=`
 	/// character. Everything before is the key; everything after the value.
 	LongV(usize),
-}
-
-impl Default for KeyKind {
-	#[inline]
-	fn default() -> Self { Self::None }
 }
 
 impl From<&[u8]> for KeyKind {
