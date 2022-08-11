@@ -18,20 +18,16 @@ use std::{
 pub enum ArgyleError {
 	/// A custom error.
 	Custom(&'static str),
+
 	/// Missing anything/everything.
 	Empty,
-	/// No trailing args.
-	NoArg,
+
 	/// Expected subcommand.
 	NoSubCmd,
 	/// Miscellaneous Silent Failure.
 	///
 	/// This has no corresponding error text, but does have its own exit code.
 	Passthru(i32),
-	/// Too many arguments.
-	TooManyArgs,
-	/// Too many options defined.
-	TooManyKeys,
 
 	#[cfg(feature = "dynamic-help")]
 	#[cfg_attr(feature = "docsrs", doc(cfg(feature = "dynamic-help")))]
@@ -40,6 +36,7 @@ pub enum ArgyleError {
 
 	/// Wants help.
 	WantsHelp,
+
 	/// Wants version.
 	WantsVersion,
 }
@@ -90,7 +87,6 @@ impl ArgyleError {
 		match self {
 			Self::Custom(s) => s,
 			Self::Empty => "Missing options, flags, arguments, and/or ketchup.",
-			Self::NoArg => "Missing required trailing argument.",
 			Self::NoSubCmd => "Missing/invalid subcommand.",
 
 			#[cfg(feature = "dynamic-help")]
@@ -104,8 +100,6 @@ impl ArgyleError {
 				| Self::WantsHelp
 				| Self::WantsVersion => "",
 
-			Self::TooManyArgs => "Too many arguments.",
-			Self::TooManyKeys => "Too many keys.",
 		}
 	}
 }
