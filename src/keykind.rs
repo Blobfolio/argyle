@@ -5,7 +5,7 @@
 */
 
 #[doc(hidden)]
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Eq, Hash, PartialEq)]
 /// The `KeyKind` enum is used to differentiate between the types of CLI argument
 /// keys [`Argue`](crate::Argue) might encounter during parsing (and `None` in the case of a
 /// non-key-looking entry).
