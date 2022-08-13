@@ -615,6 +615,44 @@ impl Argue {
 		self._option(idx)
 	}
 
+	#[must_use]
+	/// # Option Starting With…
+	///
+	/// If you have multiple, mutually exclusive options that all begin with
+	/// the same prefix, this method can be used to return the first one found,
+	/// if any.
+	///
+	/// Note: the prefix being searched for is stripped from the result. Mind
+	/// your trailing dashes.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// match args.option_by_prefix(b"--color-") {
+	///     Some((b"solid", val)) => {},  // --color-solid
+	///     Some((b"dashed", val)) => {}, // --color-dashed
+	///     _ => {},                      // No matches.
+	/// }
+	/// ```
+	pub fn option_by_prefix(&self, prefix: &[u8]) -> Option<(&[u8], &[u8])> {
+		if prefix.is_empty() { None }
+		else {
+			let (idx, key) = self.args.iter()
+				.enumerate()
+				.find_map(|(idx, x)| {
+					let key = x.strip_prefix(prefix)?;
+					if key.is_empty() { None }
+					else { Some((idx, key)) }
+				})?;
+
+			let val = self._option(idx + 1)?;
+			Some((key, val))
+		}
+	}
+
 	/// # Return Option at Index.
 	///
 	/// This method holds the common code for [`Argue::option`] and
@@ -724,6 +762,16 @@ impl Argue {
 	/// an [`OsStr`](std::ffi::OsStr) instead of bytes.
 	pub fn option2_os(&self, short: &[u8], long: &[u8]) -> Option<&OsStr> {
 		self.option2(short, long).map(OsStr::from_bytes)
+	}
+
+	#[must_use]
+	/// # Option Starting With… as `OsStr`.
+	///
+	/// This works just like [`Argue::option_by_prefix`], except it returns the
+	/// key/value as [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option_by_prefix_os(&self, prefix: &[u8]) -> Option<(&OsStr, &OsStr)> {
+		self.option_by_prefix(prefix)
+			.map(|(k, v)| (OsStr::from_bytes(k), OsStr::from_bytes(v)))
 	}
 
 	#[must_use]
@@ -1079,12 +1127,12 @@ mod tests {
 	}
 
 	#[test]
-	fn t_starting() {
+	fn t_by_prefix() {
 		let base: Vec<&[u8]> = vec![
 			b"hey",
 			b"-k",
 			b"--dump-three",
-			b"--key=Val",
+			b"--key-1=Val",
 			b"--dump-four",
 			b"--one-more",
 		];
@@ -1093,5 +1141,11 @@ mod tests {
 		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--with"), None);
+
+		assert_eq!(
+			args.option_by_prefix(b"--key-"),
+			Some((&b"1"[..], &b"Val"[..]))
+		);
+		assert_eq!(args.option_by_prefix(b"--foo"), None);
 	}
 }

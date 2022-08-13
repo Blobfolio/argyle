@@ -6,8 +6,10 @@
 
 ### New
 
-* `Argue::switch_by_prefix`
+* `Argue::option_by_prefix_os`
+* `Argue::option_by_prefix`
 * `Argue::switch_by_prefix_os`
+* `Argue::switch_by_prefix`
 
 
 
