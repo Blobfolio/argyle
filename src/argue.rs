@@ -503,6 +503,39 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// # Switch Starting With…
+	///
+	/// If you have multiple, mutually exclusive switches that all begin with
+	/// the same prefix, this method can be used to return the first one found,
+	/// if any.
+	///
+	/// Note: the prefix being searched for is stripped from the result. Mind
+	/// your trailing dashes.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// match args.switch_by_prefix(b"--dump-") {
+	///     Some(b"addresses") => {}, // --dump-addresses
+	///     Some(b"names") => {},     // --dump-names
+	///     _ => {},                  // No matches.
+	/// }
+	/// ```
+	pub fn switch_by_prefix(&self, prefix: &[u8]) -> Option<&[u8]> {
+		if prefix.is_empty() { None }
+		else {
+			self.args.iter().find_map(|x| {
+				let key = x.strip_prefix(prefix)?;
+				if key.is_empty() { None }
+				else { Some(key) }
+			})
+		}
+	}
+
+	#[must_use]
 	/// # Switches As Bitflags.
 	///
 	/// If you have a lot of switches that directly correspond to bitflags, you
@@ -666,6 +699,15 @@ impl Argue {
 
 /// # `OsStr` Methods.
 impl Argue {
+	#[must_use]
+	/// # Switch Starting With… as `OsStr`.
+	///
+	/// This works just like [`Argue::switch_by_prefix`], except it returns the
+	/// value as an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn switch_by_prefix_os(&self, prefix: &[u8]) -> Option<&OsStr> {
+		self.switch_by_prefix(prefix).map(OsStr::from_bytes)
+	}
+
 	#[must_use]
 	/// # Option as `OsStr`.
 	///
@@ -1034,5 +1076,22 @@ mod tests {
 		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
 		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
 		assert_eq!(flags & FLAG_OTHER, 0);
+	}
+
+	#[test]
+	fn t_starting() {
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-k",
+			b"--dump-three",
+			b"--key=Val",
+			b"--dump-four",
+			b"--one-more",
+		];
+
+		let args = base.iter().cloned().collect::<Argue>();
+		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--with"), None);
 	}
 }
