@@ -2,6 +2,17 @@
 
 
 
+## [0.6.2](https://github.com/Blobfolio/argyle/releases/tag/v0.6.2) - 2022-08-12
+
+### New
+
+* `Argue::option_by_prefix_os`
+* `Argue::option_by_prefix`
+* `Argue::switch_by_prefix_os`
+* `Argue::switch_by_prefix`
+
+
+
 ## [0.6.1](https://github.com/Blobfolio/argyle/releases/tag/v0.6.1) - 2022-08-11
 
 ### Changed

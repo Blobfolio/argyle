@@ -503,6 +503,43 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// # Switch By Prefix.
+	///
+	/// If you have multiple, mutually exclusive switches that all begin with
+	/// the same prefix, this method can be used to quickly return the first
+	/// match (stripped of the common prefix).
+	///
+	/// If no match is found, or an _exact_ match is found — i.e. leaving the
+	/// key empty — `None` is returned.
+	///
+	/// Do not use this if you have options sharing this prefix; `Argue`
+	/// doesn't know the difference so will simply return whatever it finds
+	/// first.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// match args.switch_by_prefix(b"--dump-") {
+	///     Some(b"addresses") => {}, // --dump-addresses
+	///     Some(b"names") => {},     // --dump-names
+	///     _ => {},                  // No matches.
+	/// }
+	/// ```
+	pub fn switch_by_prefix(&self, prefix: &[u8]) -> Option<&[u8]> {
+		if prefix.is_empty() { None }
+		else {
+			self.args.iter().find_map(|x| {
+				let key = x.strip_prefix(prefix)?;
+				if key.is_empty() { None }
+				else { Some(key) }
+			})
+		}
+	}
+
+	#[must_use]
 	/// # Switches As Bitflags.
 	///
 	/// If you have a lot of switches that directly correspond to bitflags, you
@@ -580,6 +617,48 @@ impl Argue {
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
 		let idx = self.args.iter().position(|x| x == short || x == long)? + 1;
 		self._option(idx)
+	}
+
+	#[must_use]
+	/// # Option By Prefix.
+	///
+	/// If you have multiple, mutually exclusive options that all begin with
+	/// the same prefix, this method can be used to quickly return the first
+	/// matching key (stripped of the common prefix) and value.
+	///
+	/// If no match is found, an _exact_ match is found — i.e. leaving the
+	/// key empty — or no value follows, `None` is returned.
+	///
+	/// Do not use this if you have switches sharing this prefix; `Argue`
+	/// doesn't know the difference so will simply return whatever it finds
+	/// first.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// match args.option_by_prefix(b"--color-") {
+	///     Some((b"solid", val)) => {},  // --color-solid, green
+	///     Some((b"dashed", val)) => {}, // --color-dashed, blue
+	///     _ => {},                      // No matches.
+	/// }
+	/// ```
+	pub fn option_by_prefix(&self, prefix: &[u8]) -> Option<(&[u8], &[u8])> {
+		if prefix.is_empty() { None }
+		else {
+			let (idx, key) = self.args.iter()
+				.enumerate()
+				.find_map(|(idx, x)| {
+					let key = x.strip_prefix(prefix)?;
+					if key.is_empty() { None }
+					else { Some((idx, key)) }
+				})?;
+
+			let val = self._option(idx + 1)?;
+			Some((key, val))
+		}
 	}
 
 	/// # Return Option at Index.
@@ -667,6 +746,15 @@ impl Argue {
 /// # `OsStr` Methods.
 impl Argue {
 	#[must_use]
+	/// # Switch Starting With… as `OsStr`.
+	///
+	/// This works just like [`Argue::switch_by_prefix`], except it returns the
+	/// value as an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn switch_by_prefix_os(&self, prefix: &[u8]) -> Option<&OsStr> {
+		self.switch_by_prefix(prefix).map(OsStr::from_bytes)
+	}
+
+	#[must_use]
 	/// # Option as `OsStr`.
 	///
 	/// This works just like [`Argue::option`], except it returns the value as
@@ -682,6 +770,16 @@ impl Argue {
 	/// an [`OsStr`](std::ffi::OsStr) instead of bytes.
 	pub fn option2_os(&self, short: &[u8], long: &[u8]) -> Option<&OsStr> {
 		self.option2(short, long).map(OsStr::from_bytes)
+	}
+
+	#[must_use]
+	/// # Option Starting With… as `OsStr`.
+	///
+	/// This works just like [`Argue::option_by_prefix`], except it returns the
+	/// key/value as [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option_by_prefix_os(&self, prefix: &[u8]) -> Option<(&OsStr, &OsStr)> {
+		self.option_by_prefix(prefix)
+			.map(|(k, v)| (OsStr::from_bytes(k), OsStr::from_bytes(v)))
 	}
 
 	#[must_use]
@@ -1034,5 +1132,30 @@ mod tests {
 		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
 		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
 		assert_eq!(flags & FLAG_OTHER, 0);
+	}
+
+	#[test]
+	fn t_by_prefix() {
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-k",
+			b"--dump-three",
+			b"--key-1=Val",
+			b"--dump-four",
+			b"--one-more",
+		];
+
+		let args = base.iter().cloned().collect::<Argue>();
+		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--with"), None);
+		assert_eq!(args.switch_by_prefix(b"-k"), None); // Full matches suppressed.
+
+		assert_eq!(
+			args.option_by_prefix(b"--key-"),
+			Some((&b"1"[..], &b"Val"[..]))
+		);
+		assert_eq!(args.option_by_prefix(b"--foo"), None);
+		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
 	}
 }
