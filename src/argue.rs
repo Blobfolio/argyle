@@ -503,14 +503,18 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// # Switch Starting With…
+	/// # Switch By Prefix.
 	///
 	/// If you have multiple, mutually exclusive switches that all begin with
-	/// the same prefix, this method can be used to return the first one found,
-	/// if any.
+	/// the same prefix, this method can be used to quickly return the first
+	/// match (stripped of the common prefix).
 	///
-	/// Note: the prefix being searched for is stripped from the result. Mind
-	/// your trailing dashes.
+	/// If no match is found, or an _exact_ match is found — i.e. leaving the
+	/// key empty — `None` is returned.
+	///
+	/// Do not use this if you have options sharing this prefix; `Argue`
+	/// doesn't know the difference so will simply return whatever it finds
+	/// first.
 	///
 	/// ## Examples
 	///
@@ -616,14 +620,18 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// # Option Starting With…
+	/// # Option By Prefix.
 	///
 	/// If you have multiple, mutually exclusive options that all begin with
-	/// the same prefix, this method can be used to return the first one found,
-	/// if any.
+	/// the same prefix, this method can be used to quickly return the first
+	/// matching key (stripped of the common prefix) and value.
 	///
-	/// Note: the prefix being searched for is stripped from the result. Mind
-	/// your trailing dashes.
+	/// If no match is found, an _exact_ match is found — i.e. leaving the
+	/// key empty — or no value follows, `None` is returned.
+	///
+	/// Do not use this if you have switches sharing this prefix; `Argue`
+	/// doesn't know the difference so will simply return whatever it finds
+	/// first.
 	///
 	/// ## Examples
 	///
@@ -632,8 +640,8 @@ impl Argue {
 	///
 	/// let mut args = Argue::new(0).unwrap();
 	/// match args.option_by_prefix(b"--color-") {
-	///     Some((b"solid", val)) => {},  // --color-solid
-	///     Some((b"dashed", val)) => {}, // --color-dashed
+	///     Some((b"solid", val)) => {},  // --color-solid, green
+	///     Some((b"dashed", val)) => {}, // --color-dashed, blue
 	///     _ => {},                      // No matches.
 	/// }
 	/// ```
@@ -1141,11 +1149,13 @@ mod tests {
 		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--with"), None);
+		assert_eq!(args.switch_by_prefix(b"-k"), None); // Full matches suppressed.
 
 		assert_eq!(
 			args.option_by_prefix(b"--key-"),
 			Some((&b"1"[..], &b"Val"[..]))
 		);
 		assert_eq!(args.option_by_prefix(b"--foo"), None);
+		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
 	}
 }
