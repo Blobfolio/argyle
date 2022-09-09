@@ -1,6 +1,7 @@
 # Argyle
 
 [![Documentation](https://docs.rs/argyle/badge.svg)](https://docs.rs/argyle/)
+[![Changelog](https://img.shields.io/crates/v/argyle.svg?label=Changelog&color=9cf)](https://github.com/Blobfolio/argyle/blob/master/CHANGELOG.md)
 [![crates.io](https://img.shields.io/crates/v/argyle.svg)](https://crates.io/crates/argyle)
 [![Build Status](https://github.com/Blobfolio/argyle/workflows/Build/badge.svg)](https://github.com/Blobfolio/argyle/actions)
 [![Dependency Status](https://deps.rs/repo/github/blobfolio/argyle/status.svg)](https://deps.rs/repo/github/blobfolio/argyle)

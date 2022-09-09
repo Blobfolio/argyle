@@ -2,6 +2,7 @@
 # Argyle
 
 [![Documentation](https://docs.rs/argyle/badge.svg)](https://docs.rs/argyle/)
+[![Changelog](https://img.shields.io/crates/v/argyle.svg?label=Changelog&color=9cf)](https://github.com/Blobfolio/argyle/blob/master/CHANGELOG.md)
 [![crates.io](https://img.shields.io/crates/v/argyle.svg)](https://crates.io/crates/argyle)
 
 This crate contains an agnostic CLI argument parser for Unix platforms called [`Argue`]. Unlike more robust libraries like [clap](https://crates.io/crates/clap), [`Argue`] does not hold information about expected or required arguments; it merely parses the raw arguments ([`std::env::args_os`]) into a consistent state so the implementor can query them as needed.
