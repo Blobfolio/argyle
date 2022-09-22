@@ -2,6 +2,15 @@
 
 
 
+## [0.6.3](https://github.com/Blobfolio/argyle/releases/tag/v0.6.3) - 2022-09-22
+
+### Changed
+
+* Improved docs
+* Update (dev) dependencies
+
+
+
 ## [0.6.2](https://github.com/Blobfolio/argyle/releases/tag/v0.6.2) - 2022-08-12
 
 ### New
