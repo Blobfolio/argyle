@@ -613,13 +613,15 @@ impl Argue {
 	/// # Option.
 	///
 	/// Return the value corresponding to `key`, if present. "Value" in this
-	/// case means the entry immediately following the key. Multi-value
-	/// options are not supported.
+	/// case means the entry immediately following the key.
 	///
 	/// Note: this method is the only way `Argue` knows whether or not a key
 	/// is an option (with a value) or a switch. Be sure to request all
 	/// possible options *before* requesting the trailing arguments to ensure
 	/// the division between named and trailing is properly set.
+	///
+	/// This will only ever match the _last_ occurrence. For options that
+	/// may be specified more than once, use [`Argue::option_values`] instead.
 	///
 	/// ## Examples
 	///
@@ -630,7 +632,7 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option(b"--my-opt");
 	/// ```
 	pub fn option(&self, key: &[u8]) -> Option<&[u8]> {
-		let idx = self.args.iter().position(|x| x == key)? + 1;
+		let idx = self.args.iter().rposition(|x| x == key)? + 1;
 		self._option(idx)
 	}
 
@@ -639,6 +641,9 @@ impl Argue {
 	/// This is a convenience method that checks for the existence of two
 	/// options at once, returning the first found value, if any. Generally
 	/// you would use this for a flag that has both a long and short version.
+	///
+	/// This will only ever match the _last_ occurrence. For options that
+	/// may be specified more than once, use [`Argue::option2_iter`] instead.
 	///
 	/// ## Examples
 	///
@@ -649,7 +654,7 @@ impl Argue {
 	/// let opt: Option<&[u8]> = args.option2(b"-o", b"--my-opt");
 	/// ```
 	pub fn option2(&self, short: &[u8], long: &[u8]) -> Option<&[u8]> {
-		let idx = self.args.iter().position(|x| x == short || x == long)? + 1;
+		let idx = self.args.iter().rposition(|x| x == short || x == long)? + 1;
 		self._option(idx)
 	}
 
