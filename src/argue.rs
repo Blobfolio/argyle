@@ -6,6 +6,8 @@ use crate::{
 	ArgyleError,
 	ArgsOsStr,
 	KeyKind,
+	Options,
+	OptionsOsStr,
 };
 use std::{
 	cell::Cell,
@@ -651,6 +653,75 @@ impl Argue {
 		self._option(idx)
 	}
 
+	/// # Option Value(s) Iterator.
+	///
+	/// Return any and all values corresponding to `key` (meaning the entries
+	/// immediately following each instance of `key`).
+	///
+	/// This is useful for programs that accept the same flag multiple times,
+	/// or those expecting a byte-delimited value, like a comma-separated list.
+	///
+	/// When using `delimiter`, each value will be carved up by the specified
+	/// byte and returned separately.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// for v in args.option_values(b"--my-option", None) {
+	///     println!("{:?}", std::str::from_utf8(v));
+	/// }
+	/// ```
+	pub fn option_values<'a>(&'a self, key: &'a [u8], delimiter: Option<u8>)
+	-> Options<'a> {
+		if let Some(idx) = self.args.iter().rposition(|x| x == key) {
+			let idx = idx + 1;
+			if idx < self.args.len() {
+				if self.last.get() < idx { self.last.set(idx); }
+				return Options::new(&self.args[..=idx], key, None, delimiter);
+			}
+		}
+
+		Options::default()
+	}
+
+	/// # Option 2x Value(s) Iterator.
+	///
+	/// Return any and all values corresponding to either the `short` or `long`
+	/// version of a key (meaning the entries immediately following each
+	/// instance of them).
+	///
+	/// This is useful for programs that accept the same flag multiple times,
+	/// or those expecting a byte-delimited value, like a comma-separated list.
+	///
+	/// When using `delimiter`, each value will be carved up by the specified
+	/// byte and returned separately.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// for v in args.option2_iter(b"-o", b"--my-opt", None) {
+	///     println!("{:?}", std::str::from_utf8(v));
+	/// }
+	/// ```
+	pub fn option2_iter<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
+	-> Options<'a> {
+		if let Some(idx) = self.args.iter().rposition(|x| x == short || x == long) {
+			let idx = idx + 1;
+			if idx < self.args.len() {
+				if self.last.get() < idx { self.last.set(idx); }
+				return Options::new(&self.args[..=idx], short, Some(long), delimiter);
+			}
+		}
+
+		Options::default()
+	}
+
 	#[must_use]
 	/// # Option By Prefix.
 	///
@@ -802,6 +873,24 @@ impl Argue {
 	/// an [`OsStr`](std::ffi::OsStr) instead of bytes.
 	pub fn option2_os(&self, short: &[u8], long: &[u8]) -> Option<&OsStr> {
 		self.option2(short, long).map(OsStr::from_bytes)
+	}
+
+	/// # Option Value(s) Iterator.
+	///
+	/// This works just like [`Argue::option_values`], except it returns the value
+	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option_values_os<'a>(&'a self, key: &'a [u8], delimiter: Option<u8>)
+	-> OptionsOsStr<'a> {
+		OptionsOsStr(self.option_values(key, delimiter))
+	}
+
+	/// # Option 2x Value(s) Iterator.
+	///
+	/// This works just like [`Argue::option2_iter`], except it returns the value
+	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
+	pub fn option2_iter_os<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
+	-> OptionsOsStr<'a> {
+		OptionsOsStr(self.option2_iter(short, long, delimiter))
 	}
 
 	#[must_use]

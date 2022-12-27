@@ -124,5 +124,9 @@ pub use argue::{
 pub use argue::FLAG_DYNAMIC_HELP;
 
 pub use error::ArgyleError;
-pub use iter::ArgsOsStr;
+pub use iter::{
+	ArgsOsStr,
+	Options,
+	OptionsOsStr,
+};
 pub use keykind::KeyKind;
