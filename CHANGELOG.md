@@ -2,6 +2,27 @@
 
 
 
+## [0.6.4](https://github.com/Blobfolio/argyle/releases/tag/v0.6.4) - 2022-12-26
+
+### New
+
+* `Argue::option_values`
+* `Argue::option_values_os`
+* `Argue::option2_values`
+* `Argue::option2_values_os`
+* `Argue::switch_count`
+* `Argue::switch2_count`
+
+### Changed
+
+* `Argue::option`, `Argue::option2`, etc., now return the _last_ value rather than the _first_ (in cases where the same flag is present multiple times).
+
+### Fixed
+
+* Updated ci badge syntax (docs).
+
+
+
 ## [0.6.3](https://github.com/Blobfolio/argyle/releases/tag/v0.6.3) - 2022-09-22
 
 ### Changed
