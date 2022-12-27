@@ -478,9 +478,7 @@ impl Argue {
 	/// let mut args = Argue::new(0).unwrap();
 	/// let switch: bool = args.switch(b"--my-switch");
 	/// ```
-	pub fn switch(&self, key: &[u8]) -> bool {
-		self.args.iter().any(|x| x == key)
-	}
+	pub fn switch(&self, key: &[u8]) -> bool { self.args.iter().any(|x| x == key) }
 
 	#[must_use]
 	#[inline]
