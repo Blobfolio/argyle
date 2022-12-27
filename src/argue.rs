@@ -501,6 +501,40 @@ impl Argue {
 	}
 
 	#[must_use]
+	/// # Switch Count.
+	///
+	/// Return the total number times the switch was specified.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// let count: usize = args.switch_count(b"--my-switch");
+	/// ```
+	pub fn switch_count(&self, key: &[u8]) -> usize {
+		self.args.iter().filter(|&x| x == key).count()
+	}
+
+	#[must_use]
+	/// # Switch x2 Count.
+	///
+	/// Return the total number times the switch was specified.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0).unwrap();
+	/// let switch2_count: usize = args.switch2_count(b"-s", b"--my-switch");
+	/// ```
+	pub fn switch2_count(&self, short: &[u8], long: &[u8]) -> usize {
+		self.args.iter().filter(|&x| x == short || x == long).count()
+	}
+
+	#[must_use]
 	/// # Switch By Prefix.
 	///
 	/// If you have multiple, mutually exclusive switches that all begin with
