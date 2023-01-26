@@ -2,6 +2,14 @@
 
 
 
+## [0.6.5](https://github.com/Blobfolio/argyle/releases/tag/v0.6.5) - 2023-01-26
+
+### Changed
+
+* Bump brunch `0.4`
+
+
+
 ## [0.6.4](https://github.com/Blobfolio/argyle/releases/tag/v0.6.4) - 2022-12-26
 
 ### New

@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.6.4"
+version = "0.6.5"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.62"
@@ -30,7 +30,7 @@ man-dir = "./"
 credits-dir = "./"
 
 [dev-dependencies]
-brunch = "0.3.*"
+brunch = "0.4.*"
 
 [[bench]]
 name = "fm_keykind"

@@ -24,6 +24,7 @@ pub enum ArgyleError {
 
 	/// Expected subcommand.
 	NoSubCmd,
+
 	/// Miscellaneous Silent Failure.
 	///
 	/// This has no corresponding error text, but does have its own exit code.
