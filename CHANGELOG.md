@@ -4,6 +4,8 @@
 
 ## [0.6.6](https://github.com/Blobfolio/argyle/releases/tag/v0.6.6) - 2023-02-04
 
+### Changed
+
 * Improve docs.rs environment detection
 
 
