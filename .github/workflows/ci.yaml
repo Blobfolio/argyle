@@ -53,9 +53,9 @@ jobs:
     - name: Clippy
       run: |
         cargo clippy --release --target ${{ matrix.target }}
-        cargo clippy --release --features dynamic-help --target ${{ matrix.target }}
+        cargo clippy --release --all-features --target ${{ matrix.target }}
 
     - name: Tests
       run: |
         cargo test --release --target ${{ matrix.target }}
-        cargo test --release --features dynamic-help --target ${{ matrix.target }}
+        cargo test --release --all-features --target ${{ matrix.target }}
