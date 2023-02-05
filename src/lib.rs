@@ -102,7 +102,7 @@ fn _main() -> Result<(), ArgyleError> {
 
 #![allow(clippy::module_name_repetitions)] // This is fine.
 
-#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 
 
@@ -120,7 +120,7 @@ pub use argue::{
 };
 
 #[cfg(feature = "dynamic-help")]
-#[cfg_attr(feature = "docsrs", doc(cfg(feature = "dynamic-help")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "dynamic-help")))]
 pub use argue::FLAG_DYNAMIC_HELP;
 
 pub use error::ArgyleError;
