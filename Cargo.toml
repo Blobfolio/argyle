@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.6.6"
+version = "0.6.7"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.62"

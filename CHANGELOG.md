@@ -2,6 +2,15 @@
 
 
 
+## [0.6.7](https://github.com/Blobfolio/argyle/releases/tag/v0.6.7) - 2023-02-07
+
+### Changed
+
+* Rename `Argue::option2_iter` to `Argue::option2_values`
+* Rename `Argue::option2_iter_os` to `Argue::option2_values_os`
+
+
+
 ## [0.6.6](https://github.com/Blobfolio/argyle/releases/tag/v0.6.6) - 2023-02-04
 
 ### Changed

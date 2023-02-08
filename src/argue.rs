@@ -643,7 +643,7 @@ impl Argue {
 	/// you would use this for a flag that has both a long and short version.
 	///
 	/// This will only ever match the _last_ occurrence. For options that
-	/// may be specified more than once, use [`Argue::option2_iter`] instead.
+	/// may be specified more than once, use [`Argue::option2_values`] instead.
 	///
 	/// ## Examples
 	///
@@ -710,11 +710,11 @@ impl Argue {
 	/// use argyle::Argue;
 	///
 	/// let mut args = Argue::new(0).unwrap();
-	/// for v in args.option2_iter(b"-o", b"--my-opt", None) {
+	/// for v in args.option2_values(b"-o", b"--my-opt", None) {
 	///     println!("{:?}", std::str::from_utf8(v));
 	/// }
 	/// ```
-	pub fn option2_iter<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
+	pub fn option2_values<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
 	-> Options<'a> {
 		if let Some(idx) = self.args.iter().rposition(|x| x == short || x == long) {
 			let idx = idx + 1;
@@ -891,11 +891,11 @@ impl Argue {
 
 	/// # Option 2x Value(s) Iterator.
 	///
-	/// This works just like [`Argue::option2_iter`], except it returns the value
+	/// This works just like [`Argue::option2_values`], except it returns the value
 	/// as an [`OsStr`](std::ffi::OsStr) instead of bytes.
-	pub fn option2_iter_os<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
+	pub fn option2_values_os<'a>(&'a self, short: &'a [u8], long: &'a [u8], delimiter: Option<u8>)
 	-> OptionsOsStr<'a> {
-		OptionsOsStr(self.option2_iter(short, long, delimiter))
+		OptionsOsStr(self.option2_values(short, long, delimiter))
 	}
 
 	#[must_use]

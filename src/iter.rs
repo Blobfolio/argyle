@@ -62,7 +62,7 @@ impl<'a> ArgsOsStr<'a> {
 /// This iterator yields the value(s) corresponding to a given option, useful
 /// for commands that accept the same argument multiple times.
 ///
-/// It is the return value for [`Argue::option_values`](crate::Argue::option_values) and [`Argue::option2_iter`](crate::Argue::option2_iter).
+/// It is the return value for [`Argue::option_values`](crate::Argue::option_values) and [`Argue::option2_values`](crate::Argue::option2_values).
 pub struct Options<'a> {
 	buf: Vec<&'a [u8]>,
 	inner: &'a [Vec<u8>],
@@ -130,7 +130,7 @@ impl<'a> Options<'a> {
 /// This iterator yields the value(s) corresponding to a given option, useful
 /// for commands that accept the same argument multiple times.
 ///
-/// It is the return value for [`Argue::option_values_os`](crate::Argue::option_values_os) and [`Argue::option2_iter_os`](crate::Argue::option2_iter_os).
+/// It is the return value for [`Argue::option_values_os`](crate::Argue::option_values_os) and [`Argue::option2_values_os`](crate::Argue::option2_values_os).
 pub struct OptionsOsStr<'a>(pub(crate) Options<'a>);
 
 impl<'a> Iterator for OptionsOsStr<'a> {
@@ -173,12 +173,12 @@ mod tests {
 		);
 
 		assert_eq!(
-			args.option2_iter(b"-k", b"--key", None).collect::<Vec<&[u8]>>(),
+			args.option2_values(b"-k", b"--key", None).collect::<Vec<&[u8]>>(),
 			[&b"Val"[..], b"hello,world", b"nice"],
 		);
 
 		assert_eq!(
-			args.option2_iter(b"-k", b"--key", Some(b',')).collect::<Vec<&[u8]>>(),
+			args.option2_values(b"-k", b"--key", Some(b',')).collect::<Vec<&[u8]>>(),
 			[&b"Val"[..], b"hello", b"world", b"nice"],
 		);
 	}
@@ -206,12 +206,12 @@ mod tests {
 		);
 
 		assert_eq!(
-			args.option2_iter_os(b"-k", b"--key", None).collect::<Vec<&OsStr>>(),
+			args.option2_values_os(b"-k", b"--key", None).collect::<Vec<&OsStr>>(),
 			[OsStr::new("Val"), OsStr::new("hello,world"), OsStr::new("nice")],
 		);
 
 		assert_eq!(
-			args.option2_iter_os(b"-k", b"--key", Some(b',')).collect::<Vec<&OsStr>>(),
+			args.option2_values_os(b"-k", b"--key", Some(b',')).collect::<Vec<&OsStr>>(),
 			[OsStr::new("Val"), OsStr::new("hello"), OsStr::new("world"), OsStr::new("nice")],
 		);
 	}
