@@ -32,7 +32,7 @@ man-dir = "./"
 credits-dir = "./"
 
 [dev-dependencies]
-brunch = "0.4.*"
+brunch = "0.5.*"
 
 [[bench]]
 name = "fm_keykind"
