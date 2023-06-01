@@ -1,6 +1,6 @@
 # Project Dependencies
     Package:   argyle
-    Version:   0.6.7
-    Generated: 2023-02-08 04:34:24 UTC
+    Version:   0.6.8
+    Generated: 2023-06-01 20:08:59 UTC
 
 This package has no dependencies.
