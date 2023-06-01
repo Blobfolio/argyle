@@ -2,6 +2,16 @@
 
 
 
+## [0.6.8](https://github.com/Blobfolio/argyle/releases/tag/v0.6.8) - 2023-06-01
+
+### Changed
+
+* Bump dev dependencies
+* CI: test in debug and release modes
+* CI: test MSRV
+
+
+
 ## [0.6.7](https://github.com/Blobfolio/argyle/releases/tag/v0.6.7) - 2023-02-07
 
 ### Changed
