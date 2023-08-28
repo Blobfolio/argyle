@@ -19,17 +19,6 @@ For simple applications, this agnostic approach can significantly reduce the ove
 
 
 
-## Installation
-
-Add `argyle` to your `dependencies` in `Cargo.toml`, like:
-
-```ignore
-[dependencies]
-argyle = "0.6.*"
-```
-
-
-
 ## Example
 
 A general setup might look something like the following. Refer to the documentation for [`Argue`] for more information, caveats, etc.
