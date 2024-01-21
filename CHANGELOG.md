@@ -2,6 +2,23 @@
 
 
 
+## [0.7.0](https://github.com/Blobfolio/argyle/releases/tag/v0.7.0) - 2024-01-20
+
+### Breaking
+
+* Bump MSRV to `1.70`
+* `Argue::with_list` will now read lines from STDIN when the path is given as `-`
+
+### New
+
+* `Argue::with_trailing_args`
+
+### Changed
+
+* `Argue::with_list` now buffers file reads (instead of reading everything in one go)
+
+
+
 ## [0.6.8](https://github.com/Blobfolio/argyle/releases/tag/v0.6.8) - 2023-06-01
 
 ### Changed
