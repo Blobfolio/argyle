@@ -15,6 +15,12 @@ use std::{
 		OsStr,
 		OsString,
 	},
+	fs::File,
+	io::{
+		BufRead,
+		BufReader,
+		IsTerminal,
+	},
 	ops::{
 		BitOr,
 		Deref,
@@ -400,21 +406,18 @@ impl Argue {
 	}
 
 	#[must_use]
-	/// # Add Arguments From a Text File.
+	/// # With "Trailing" Arguments From a Text File or STDIN.
 	///
-	/// When chained to `new()`, if either "-l" or "--list" options are found,
-	/// the subsequent value (if any) is read as a text file, and each non-
-	/// empty line within is appended to the set as additional arguments,
-	/// exactly as if they were provided directly.
+	/// Read lines from the text file — or STDIN if "-" — specified by the
+	/// built-in `-l`/`--list` option (if present), appending them to the set
+	/// as "trailing" arguments. (One argument per line.)
 	///
-	/// No judgments are passed on the contents of the file. If a line has
-	/// length, it is appended.
+	/// These arguments, if any, along with anything the user included in the
+	/// actual command, will then be accessible the usual way, via methods like
+	/// [`Argue::args`], etc.
 	///
-	/// Note: if using this approach to seed a command with file paths, make
-	/// sure those paths are absolute as their relativity will likely be lost
-	/// in translation.
-	///
-	/// This method always transparently returns `self`.
+	/// Note that the input must be valid UTF-8. Its lines will be trimmed and
+	/// checked for length before inclusion, but won't otherwise be altered.
 	///
 	/// ## Examples
 	///
@@ -422,14 +425,54 @@ impl Argue {
 	/// use argyle::Argue;
 	///
 	/// let mut args = Argue::new(0).unwrap().with_list();
+	/// for arg in args.args() {
+	///     // Do something…
+	/// }
 	/// ```
-	pub fn with_list(mut self) -> Self {
-		if let Some(raw) = self.option2_os(b"-l", b"--list").and_then(|p| std::fs::read_to_string(p).ok()) {
-			for line in raw.lines() {
-				let bytes = line.trim().as_bytes();
-				if ! bytes.is_empty() {
-					self.args.push(bytes.to_vec());
+	pub fn with_list(self) -> Self {
+		if let Some(p) = self.option2_os(b"-l", b"--list") {
+			// STDIN.
+			if p == "-" {
+				// But only if the stream appears to be redirected…
+				let stdin = std::io::stdin();
+				if ! stdin.is_terminal() {
+					return self.with_trailing_args(stdin.lines().flatten());
 				}
+			}
+			// Text file.
+			else if let Ok(raw) = File::open(p).map(BufReader::new) {
+				return self.with_trailing_args(raw.lines().flatten());
+			}
+		}
+
+		self
+	}
+
+	#[must_use]
+	/// # With "Trailing" Arguments.
+	///
+	/// Append arbitrary strings to the set as "trailing" arguments, making
+	/// them — along with anything the user included in the actual command —
+	/// available via methods like [`Argue::args`], etc.
+	///
+	/// Note that arguments are trimmed and checked for length before being
+	/// added, but are otherwise passed through as-are.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let mut args = Argue::new(0)
+	///     .unwrap()
+	///     .with_trailing_args(&["apples", "bananas", "carrots"]);
+	/// ```
+	pub fn with_trailing_args<B, I>(mut self, args: I) -> Self
+	where B: AsRef<str>, I: IntoIterator<Item=B> {
+		for arg in args {
+			let bytes = arg.as_ref().trim().as_bytes();
+			if ! bytes.is_empty() {
+				self.args.push(bytes.to_vec());
 			}
 		}
 
@@ -1283,5 +1326,23 @@ mod tests {
 		);
 		assert_eq!(args.option_by_prefix(b"--foo"), None);
 		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
+	}
+
+	#[test]
+	fn t_with_trailing_args() {
+		let base: Vec<&[u8]> = vec![ b"foo" ];
+
+		// As is.
+		let args = base.iter().cloned().collect::<Argue>();
+		assert_eq!(args.args(), base);
+
+		// With extra stuff.
+		let args = base.iter().cloned().collect::<Argue>()
+			.with_trailing_args(&[
+				"bar",
+				" baz ", // Should be trimmed.
+				" ",     // Should be ignored.
+			]);
+		assert_eq!(args.args(), &[b"foo", b"bar", b"baz"]);
 	}
 }

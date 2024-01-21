@@ -60,8 +60,10 @@ jobs:
       run: |
         cargo test --target ${{ matrix.target }}
         cargo test --all-features --target ${{ matrix.target }}
+        echo "foo/bar" | cargo run -q --example "list" --target ${{ matrix.target }} -- --list -
 
     - name: Tests (Release)
       run: |
         cargo test --release --target ${{ matrix.target }}
         cargo test --release --all-features --target ${{ matrix.target }}
+        echo "foo/bar" | cargo run --release -q --example "list" --target ${{ matrix.target }} -- --list -
