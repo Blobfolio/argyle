@@ -74,7 +74,7 @@ bench BENCH="":
 
 
 # Build and Run Example.
-@demo +ARGS:
+@debug +ARGS:
 	clear
 	cargo run \
 		-q \
@@ -84,6 +84,18 @@ bench BENCH="":
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
+
+
+# Build and Run Example.
+@debug-args:
+	clear
+	find . -name '*.rs' -type f -exec realpath {} + | cargo run \
+		-q \
+		--release \
+		--example "list" \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}" \
+		-- -l - "foo/bar"
 
 
 # Build Docs.
@@ -165,6 +177,7 @@ version:
 
 	# Set the release version!
 	just _version "{{ justfile_directory() }}" "$_ver2"
+	just credits
 
 
 # Set version for real.
