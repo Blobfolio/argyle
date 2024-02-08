@@ -436,12 +436,12 @@ impl Argue {
 				// But only if the stream appears to be redirected…
 				let stdin = std::io::stdin();
 				if ! stdin.is_terminal() {
-					return self.with_trailing_args(stdin.lines().flatten());
+					return self.with_trailing_args(stdin.lines().map_while(Result::ok));
 				}
 			}
 			// Text file.
 			else if let Ok(raw) = File::open(p).map(BufReader::new) {
-				return self.with_trailing_args(raw.lines().flatten());
+				return self.with_trailing_args(raw.lines().map_while(Result::ok));
 			}
 		}
 

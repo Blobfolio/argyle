@@ -2,6 +2,14 @@
 
 
 
+## [0.7.1](https://github.com/Blobfolio/argyle/releases/tag/v0.7.1) - 2024-02-08
+
+### Changed
+
+* Minor code cleanup and lints
+
+
+
 ## [0.7.0](https://github.com/Blobfolio/argyle/releases/tag/v0.7.0) - 2024-01-20
 
 ### Breaking
