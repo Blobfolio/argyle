@@ -478,6 +478,42 @@ impl Argue {
 
 		self
 	}
+
+	/// # Verify Keys.
+	///
+	/// Return the first key-like entry in the collection that is not a valid
+	/// switch or option.
+	///
+	/// Key-like, in this context, means anything beginning with one or two
+	/// dashes, followed by an ASCII letter, that does not directly follow a
+	/// valid option (as that would make it a value).
+	///
+	/// Note: depending on the context, this may return a false positive. For
+	/// example, a program expecting file paths as trailing arguments might
+	/// receive something key-like-but-not-a-key like "--foo.jpg".
+	pub fn check_keys(&self, switches: &[&[u8]], options: &[&[u8]]) -> Option<&[u8]> {
+		let len = self.args.len();
+		let mut idx = 0;
+		while idx < len {
+			let v = self.args[idx].as_slice();
+
+			// If it's an option, we'll need to skip the next value, and maybe
+			// move the trailing arg pointer.
+			if options.contains(&v) {
+				idx += 1;
+				if self.last.get() < idx { self.last.set(idx); }
+			}
+			// Otherwise if it not a switch and is key-like, we're done!
+			else if ! switches.contains(&v) && is_key_like(v) {
+				return Some(v);
+			}
+
+			// Bump and repeat.
+			idx += 1;
+		}
+
+		None
+	}
 }
 
 /// ## Casting.
@@ -985,6 +1021,21 @@ impl Argue {
 
 
 
+/// # Is Key Like?
+///
+/// Returns true if the value begins with one or two dashes followed by an
+/// ASCII letter.
+const fn is_key_like(v: &[u8]) -> bool {
+	let len = v.len();
+	if len >= 2 && v[0] == b'-' {
+		if v[1] == b'-' { len > 2 && v[2].is_ascii_alphabetic() }
+		else { v[1].is_ascii_alphabetic() }
+	}
+	else { false }
+}
+
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1085,48 +1136,125 @@ mod tests {
 	}
 
 	#[test]
-	fn t_version() {
-		let mut base: Vec<&[u8]> = vec![
+	fn t_bitflags() {
+		const FLAG_EMPTY: u8 =    0b0000_0001;
+		const FLAG_HELLO: u8 =    0b0000_0010;
+		const FLAG_K: u8 =        0b0000_0100;
+		const FLAG_ONE_MORE: u8 = 0b0000_1000;
+		const FLAG_OTHER: u8 =    0b0001_0000;
+
+		let base: Vec<&[u8]> = vec![
 			b"hey",
-			b"-V",
+			b"-k",
+			b"--empty",
+			b"--key=Val",
+			b"--hello",
+			b"--one-more",
 		];
 
-		// We should be wanting a version.
-		let mut args: Argue = base.iter().copied().collect();
+		let args: Argue = base.iter().copied().collect();
+		let flags: u8 = args.bitflags([
+			(&b"-k"[..], FLAG_K),
+			(&b"--empty"[..], FLAG_EMPTY),
+			(&b"--hello"[..], FLAG_HELLO),
+			(&b"--one-more"[..], FLAG_ONE_MORE),
+			(&b"--other"[..], FLAG_OTHER),
+		]);
 
-		assert!(matches!(
-			args.check_flags(FLAG_VERSION),
-			Err(ArgyleError::WantsVersion)
-		));
+		assert_eq!(flags & FLAG_K, FLAG_K);
+		assert_eq!(flags & FLAG_EMPTY, FLAG_EMPTY);
+		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
+		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
+		assert_eq!(flags & FLAG_OTHER, 0);
+	}
 
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
+	#[test]
+	fn t_by_prefix() {
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-k",
+			b"--dump-three",
+			b"--key-1=Val",
+			b"--dump-four",
+			b"--one-more",
+		];
 
-		// Repeat with the long flag.
-		base[1] = b"--version";
+		let args = base.iter().cloned().collect::<Argue>();
+		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
+		assert_eq!(args.switch_by_prefix(b"--with"), None);
+		assert_eq!(args.switch_by_prefix(b"-k"), None); // Full matches suppressed.
 
-		// We should be wanting a version.
-		args = base.iter().copied().collect();
-		assert!(matches!(
-			args.check_flags(FLAG_VERSION),
-			Err(ArgyleError::WantsVersion)
-		));
+		assert_eq!(
+			args.option_by_prefix(b"--key-"),
+			Some((&b"1"[..], &b"Val"[..]))
+		);
+		assert_eq!(args.option_by_prefix(b"--foo"), None);
+		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
+	}
 
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
+	#[test]
+	fn t_check_keys() {
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-kVal",
+			b"--empty=",
+			b"-f",
+			b"--key",
+			b"Val",
+			b"trailing",
+			b"args",
+			b"here",
+		];
 
-		// One last time without a version arg present.
-		base[1] = b"--ok";
+		let args: Argue = base.iter().copied().collect();
 
-		// We should be wanting a version.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_VERSION).is_ok());
+		// Before we do anything, the trailing arg marker will be in the wrong
+		// place.
+		assert_eq!(args.arg(0), Some(b"Val".as_slice()));
 
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
+		// All keys accounted for.
+		assert_eq!(
+			args.check_keys(&[b"-f"], &[b"-k", b"--empty", b"--key"]),
+			None,
+		);
+
+		// Now that we've learned --key is an option, the marker should have
+		// moved.
+		assert_eq!(args.arg(0), Some(b"trailing".as_slice()));
+
+		// Missing --key.
+		assert_eq!(
+			args.check_keys(&[b"-f"], &[b"-k", b"--empty"]),
+			Some(b"--key".as_slice()),
+		);
+
+		// Missing everything.
+		assert_eq!(args.check_keys(&[], &[]), Some(b"-k".as_slice()));
+	}
+
+	#[test]
+	fn t_doubledash() {
+		let base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-kVal",
+			b"--",
+			b"more",
+			b"things",
+			b"here",
+		];
+
+		let args: Argue = base.iter().copied().collect();
+
+		// It should stop at the double-dash.
+		assert_eq!(
+			*args,
+			[
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+			]
+		);
 	}
 
 	#[test]
@@ -1229,6 +1357,64 @@ mod tests {
 	}
 
 	#[test]
+	fn t_key_like() {
+		assert!(is_key_like(b"-hi"));
+		assert!(is_key_like(b"-Hi"));
+		assert!(is_key_like(b"--hi"));
+		assert!(is_key_like(b"--Hi"));
+		assert!(! is_key_like(b"hi"));
+		assert!(! is_key_like(b"- hi"));
+		assert!(! is_key_like(b"--9"));
+		assert!(! is_key_like(b"--"));
+		assert!(! is_key_like(b"Z"));
+	}
+
+	#[test]
+	fn t_version() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-V",
+		];
+
+		// We should be wanting a version.
+		let mut args: Argue = base.iter().copied().collect();
+
+		assert!(matches!(
+			args.check_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
+
+		// Repeat with the long flag.
+		base[1] = b"--version";
+
+		// We should be wanting a version.
+		args = base.iter().copied().collect();
+		assert!(matches!(
+			args.check_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
+
+		// One last time without a version arg present.
+		base[1] = b"--ok";
+
+		// We should be wanting a version.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
+
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
+	}
+
+	#[test]
 	fn t_with_list() {
 		let list = std::path::Path::new("skel/list.txt");
 		assert!(list.exists(), "Missing list.txt");
@@ -1268,64 +1454,6 @@ mod tests {
 				b"skel/not-list.txt".to_vec(),
 			]
 		);
-	}
-
-	#[test]
-	fn t_bitflags() {
-		const FLAG_EMPTY: u8 =    0b0000_0001;
-		const FLAG_HELLO: u8 =    0b0000_0010;
-		const FLAG_K: u8 =        0b0000_0100;
-		const FLAG_ONE_MORE: u8 = 0b0000_1000;
-		const FLAG_OTHER: u8 =    0b0001_0000;
-
-		let base: Vec<&[u8]> = vec![
-			b"hey",
-			b"-k",
-			b"--empty",
-			b"--key=Val",
-			b"--hello",
-			b"--one-more",
-		];
-
-		let args: Argue = base.iter().copied().collect();
-		let flags: u8 = args.bitflags([
-			(&b"-k"[..], FLAG_K),
-			(&b"--empty"[..], FLAG_EMPTY),
-			(&b"--hello"[..], FLAG_HELLO),
-			(&b"--one-more"[..], FLAG_ONE_MORE),
-			(&b"--other"[..], FLAG_OTHER),
-		]);
-
-		assert_eq!(flags & FLAG_K, FLAG_K);
-		assert_eq!(flags & FLAG_EMPTY, FLAG_EMPTY);
-		assert_eq!(flags & FLAG_HELLO, FLAG_HELLO);
-		assert_eq!(flags & FLAG_ONE_MORE, FLAG_ONE_MORE);
-		assert_eq!(flags & FLAG_OTHER, 0);
-	}
-
-	#[test]
-	fn t_by_prefix() {
-		let base: Vec<&[u8]> = vec![
-			b"hey",
-			b"-k",
-			b"--dump-three",
-			b"--key-1=Val",
-			b"--dump-four",
-			b"--one-more",
-		];
-
-		let args = base.iter().cloned().collect::<Argue>();
-		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
-		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
-		assert_eq!(args.switch_by_prefix(b"--with"), None);
-		assert_eq!(args.switch_by_prefix(b"-k"), None); // Full matches suppressed.
-
-		assert_eq!(
-			args.option_by_prefix(b"--key-"),
-			Some((&b"1"[..], &b"Val"[..]))
-		);
-		assert_eq!(args.option_by_prefix(b"--foo"), None);
-		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
 	}
 
 	#[test]
