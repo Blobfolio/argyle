@@ -1085,48 +1085,27 @@ mod tests {
 	}
 
 	#[test]
-	fn t_version() {
-		let mut base: Vec<&[u8]> = vec![
+	fn t_doubledash() {
+		let base: Vec<&[u8]> = vec![
 			b"hey",
-			b"-V",
+			b"-kVal",
+			b"--",
+			b"more",
+			b"things",
+			b"here",
 		];
 
-		// We should be wanting a version.
-		let mut args: Argue = base.iter().copied().collect();
+		let args: Argue = base.iter().copied().collect();
 
-		assert!(matches!(
-			args.check_flags(FLAG_VERSION),
-			Err(ArgyleError::WantsVersion)
-		));
-
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
-
-		// Repeat with the long flag.
-		base[1] = b"--version";
-
-		// We should be wanting a version.
-		args = base.iter().copied().collect();
-		assert!(matches!(
-			args.check_flags(FLAG_VERSION),
-			Err(ArgyleError::WantsVersion)
-		));
-
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
-
-		// One last time without a version arg present.
-		base[1] = b"--ok";
-
-		// We should be wanting a version.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_VERSION).is_ok());
-
-		// Same thing without the version flag.
-		args = base.iter().copied().collect();
-		assert!(args.check_flags(FLAG_HELP).is_ok());
+		// It should stop at the double-dash.
+		assert_eq!(
+			*args,
+			[
+				b"hey".to_vec(),
+				b"-k".to_vec(),
+				b"Val".to_vec(),
+			]
+		);
 	}
 
 	#[test]
@@ -1229,45 +1208,48 @@ mod tests {
 	}
 
 	#[test]
-	fn t_with_list() {
-		let list = std::path::Path::new("skel/list.txt");
-		assert!(list.exists(), "Missing list.txt");
-
-		let mut base: Vec<Vec<u8>> = vec![
-			b"print".to_vec(),
-			b"-l".to_vec(),
-			b"skel/list.txt".to_vec(),
+	fn t_version() {
+		let mut base: Vec<&[u8]> = vec![
+			b"hey",
+			b"-V",
 		];
 
-		let mut args = base.iter().cloned().collect::<Argue>().with_list();
-		assert_eq!(
-			*args,
-			[
-				b"print".to_vec(),
-				b"-l".to_vec(),
-				b"skel/list.txt".to_vec(),
-				b"/foo/bar/one".to_vec(),
-				b"/foo/bar/two".to_vec(),
-				b"/foo/bar/three".to_vec(),
-			]
-		);
+		// We should be wanting a version.
+		let mut args: Argue = base.iter().copied().collect();
 
-		// These should be trailing args.
-		assert_eq!(args.arg(0), Some(&b"/foo/bar/one"[..]));
-		assert_eq!(args.arg(1), Some(&b"/foo/bar/two"[..]));
-		assert_eq!(args.arg(2), Some(&b"/foo/bar/three"[..]));
+		assert!(matches!(
+			args.check_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
 
-		// Now try it with a bad file.
-		base[2] = b"skel/not-list.txt".to_vec();
-		args = base.iter().cloned().collect::<Argue>().with_list();
-		assert_eq!(
-			*args,
-			[
-				b"print".to_vec(),
-				b"-l".to_vec(),
-				b"skel/not-list.txt".to_vec(),
-			]
-		);
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
+
+		// Repeat with the long flag.
+		base[1] = b"--version";
+
+		// We should be wanting a version.
+		args = base.iter().copied().collect();
+		assert!(matches!(
+			args.check_flags(FLAG_VERSION),
+			Err(ArgyleError::WantsVersion)
+		));
+
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
+
+		// One last time without a version arg present.
+		base[1] = b"--ok";
+
+		// We should be wanting a version.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_VERSION).is_ok());
+
+		// Same thing without the version flag.
+		args = base.iter().copied().collect();
+		assert!(args.check_flags(FLAG_HELP).is_ok());
 	}
 
 	#[test]
@@ -1326,6 +1308,48 @@ mod tests {
 		);
 		assert_eq!(args.option_by_prefix(b"--foo"), None);
 		assert_eq!(args.option_by_prefix(b"--key-1"), None); // Full matches suppressed.
+	}
+
+	#[test]
+	fn t_with_list() {
+		let list = std::path::Path::new("skel/list.txt");
+		assert!(list.exists(), "Missing list.txt");
+
+		let mut base: Vec<Vec<u8>> = vec![
+			b"print".to_vec(),
+			b"-l".to_vec(),
+			b"skel/list.txt".to_vec(),
+		];
+
+		let mut args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/list.txt".to_vec(),
+				b"/foo/bar/one".to_vec(),
+				b"/foo/bar/two".to_vec(),
+				b"/foo/bar/three".to_vec(),
+			]
+		);
+
+		// These should be trailing args.
+		assert_eq!(args.arg(0), Some(&b"/foo/bar/one"[..]));
+		assert_eq!(args.arg(1), Some(&b"/foo/bar/two"[..]));
+		assert_eq!(args.arg(2), Some(&b"/foo/bar/three"[..]));
+
+		// Now try it with a bad file.
+		base[2] = b"skel/not-list.txt".to_vec();
+		args = base.iter().cloned().collect::<Argue>().with_list();
+		assert_eq!(
+			*args,
+			[
+				b"print".to_vec(),
+				b"-l".to_vec(),
+				b"skel/not-list.txt".to_vec(),
+			]
+		);
 	}
 
 	#[test]
