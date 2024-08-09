@@ -531,6 +531,9 @@ impl Argue {
 	/// If you merely want something to iterate over, you can alternatively
 	/// dereference the struct to a string slice.
 	///
+	/// If you're only interested in the _trailing_ arguments, use
+	/// `Argue::take_trailing` instead.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -539,6 +542,35 @@ impl Argue {
 	/// let args: Vec<Vec<u8>> = Argue::new(0).unwrap().take();
 	/// ```
 	pub fn take(self) -> Vec<Vec<u8>> { self.args }
+
+	#[must_use]
+	/// # Take Trailing Arguments.
+	///
+	/// Split off and return the instance's (owned) trailing arguments,
+	/// discarding everything else.
+	///
+	/// As with other trailing argument-related methods, make sure you query
+	/// expected options before calling this method, otherwise it might
+	/// mistake a final associated value for a trailing argument.
+	///
+	/// Of course, that matters less here than elsewhere since you'll lose
+	/// access to the switches and options anyway. Haha.
+	///
+	/// If you want _everything_, use `Argue::take` instead.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use argyle::Argue;
+	///
+	/// let trailing: Vec<Vec<u8>> = Argue::new(0).unwrap().take_trailing();
+	/// ```
+	pub fn take_trailing(self) -> Vec<Vec<u8>> {
+		let idx = self.arg_idx();
+		let Self { mut args, .. } = self;
+		args.drain(..idx);
+		args
+	}
 }
 
 /// ## Queries.
@@ -1116,15 +1148,6 @@ mod tests {
 		// Let's see what trailing args look like when there are none.
 		assert_eq!(args.arg(0), None);
 
-		// Let's also make sure the trailing arguments work too.
-		let trailing: &[&[u8]] = &[b"Hello", b"World"];
-		base.extend_from_slice(trailing);
-		args = base.iter().copied().collect();
-		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
-		assert_eq!(args.arg(1), Some(&b"World"[..]));
-		assert_eq!(args.arg(2), None);
-		assert_eq!(args.args(), trailing);
-
 		// If there are no keys, the first entry should also be the first
 		// argument.
 		args = [b"hello".to_vec()].into_iter().collect();
@@ -1133,6 +1156,16 @@ mod tests {
 		// Unless we're expecting a subcommand...
 		args.flags |= FLAG_SUBCOMMAND;
 		assert!(args.arg(0).is_none());
+
+		// Let's also make sure the trailing arguments work too.
+		let trailing: &[&[u8]] = &[b"Hello", b"World"];
+		base.extend_from_slice(trailing);
+		args = base.iter().copied().collect();
+		assert_eq!(args.arg(0), Some(&b"Hello"[..]));
+		assert_eq!(args.arg(1), Some(&b"World"[..]));
+		assert_eq!(args.arg(2), None);
+		assert_eq!(args.args(), trailing);
+		assert_eq!(args.take_trailing(), trailing); // This should match too.
 	}
 
 	#[test]
