@@ -12,7 +12,7 @@ use std::os::unix::ffi::OsStrExt;
 
 fn main() {
 	println!("Struct size: {}", size_of::<argyle::Argue>());
-	println!("");
+	println!();
 
 	let args = argyle::Argue::new(argyle::FLAG_REQUIRED);
 	match args {
@@ -20,14 +20,14 @@ fn main() {
 			println!("\x1b[2mRAW:\x1b[0m");
 			println!("{:?}", a);
 
-			println!("");
+			println!();
 			println!("\x1b[2mPRETTY:\x1b[0m");
 
 			a.take().iter().for_each(|b| {
 				println!("{}", OsStr::from_bytes(b).to_str().unwrap_or("[Invalid UTF-8]"));
 			});
 
-			println!("");
+			println!();
 		},
 		Err(e) => {
 			println!("Error: {}", e);
