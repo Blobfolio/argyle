@@ -21,7 +21,7 @@ fn main() {
 				std::process::exit(1);
 			}
 
-			println!("");
+			println!();
 		},
 		Err(e) => {
 			println!("\x1b[1;91mError:\x1b[0m {e}");

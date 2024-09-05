@@ -520,7 +520,6 @@ impl Argue {
 ///
 /// These methods convert `Argue` into different data structures.
 impl Argue {
-	#[allow(clippy::missing_const_for_fn)] // Doesn't work!
 	#[must_use]
 	#[inline]
 	/// # Into Owned Vec.
@@ -1074,6 +1073,7 @@ mod tests {
 	use brunch as _;
 
 	#[test]
+	#[allow(clippy::cognitive_complexity)] // It is what it is.
 	fn t_parse_args() {
 		let mut base: Vec<&[u8]> = vec![
 			b"hey",
@@ -1150,7 +1150,7 @@ mod tests {
 
 		// If there are no keys, the first entry should also be the first
 		// argument.
-		args = [b"hello".to_vec()].into_iter().collect();
+		args = std::iter::once(b"hello".to_vec()).collect();
 		assert_eq!(args.arg(0), Some(&b"hello"[..]));
 
 		// Unless we're expecting a subcommand...
@@ -1212,7 +1212,7 @@ mod tests {
 			b"--one-more",
 		];
 
-		let args = base.iter().cloned().collect::<Argue>();
+		let args = base.iter().copied().collect::<Argue>();
 		assert_eq!(args.switch_by_prefix(b"--dump"), Some(&b"-three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--dump-"), Some(&b"three"[..]));
 		assert_eq!(args.switch_by_prefix(b"--with"), None);
@@ -1494,12 +1494,12 @@ mod tests {
 		let base: Vec<&[u8]> = vec![ b"foo" ];
 
 		// As is.
-		let args = base.iter().cloned().collect::<Argue>();
+		let args = base.iter().copied().collect::<Argue>();
 		assert_eq!(args.args(), base);
 
 		// With extra stuff.
-		let args = base.iter().cloned().collect::<Argue>()
-			.with_trailing_args(&[
+		let args = base.iter().copied().collect::<Argue>()
+			.with_trailing_args([
 				"bar",
 				" baz ", // Should be trimmed.
 				" ",     // Should be ignored.

@@ -58,6 +58,9 @@ bench BENCH="":
 @clippy:
 	clear
 	cargo clippy \
+		--all-features \
+		--target-dir "{{ cargo_dir }}"
+	cargo clippy \
 		--release \
 		--all-features \
 		--target-dir "{{ cargo_dir }}"

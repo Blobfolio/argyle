@@ -63,6 +63,7 @@ mod tests {
 	use brunch as _;
 
 	#[test]
+	#[allow(clippy::cognitive_complexity)] // It is what it is.
 	fn t_from() {
 		assert_eq!(KeyKind::from(&b"Your Mom"[..]), KeyKind::None);
 		assert_eq!(KeyKind::from(&b"--"[..]), KeyKind::None);

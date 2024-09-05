@@ -14,7 +14,15 @@ use std::{
 ///
 /// This iterates through the arguments of an [`Argue`](crate::Argue) as [`OsStr`](std::ffi::OsStr) values.
 pub struct ArgsOsStr<'a> {
+	/// # Slice.
+	///
+	/// A borrowed copy of the arguments, as a slice.
 	inner: &'a [Vec<u8>],
+
+	/// # Next Index.
+	///
+	/// The position of the next argument to pull, i.e. `inner[pos]`. The value
+	/// is incremented after each successful fetch.
 	pos: usize,
 }
 
@@ -64,10 +72,31 @@ impl<'a> ArgsOsStr<'a> {
 ///
 /// It is the return value for [`Argue::option_values`](crate::Argue::option_values) and [`Argue::option2_values`](crate::Argue::option2_values).
 pub struct Options<'a> {
+	/// # Found-but-Unyielded Values.
+	///
+	/// If iteration encounters more values than it can return, the extras are
+	/// added to this buffer so they can be yielded on subsequent passes.
 	buf: Vec<&'a [u8]>,
+
+	/// # Slice.
+	///
+	/// A borrowed copy of the arguments. Note iteration potentially shrinks
+	/// this slice. If both it and `buf` are empty, iteration is done.
 	inner: &'a [Vec<u8>],
+
+	/// # Needle.
+	///
+	/// Only values corresponding to this key are yielded.
 	k1: &'a [u8],
+
+	/// # Optional Second Needle.
 	k2: Option<&'a [u8]>,
+
+	/// # Value Delimiter.
+	///
+	/// If specified, a matching value will be split on this character,
+	/// potentially yielded multiple values instead of just one. For example,
+	/// a comma would turn `one,two,three` into `one`, `two`, and `three`.
 	delimiter: Option<u8>,
 }
 
