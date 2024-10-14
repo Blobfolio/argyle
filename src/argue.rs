@@ -1076,7 +1076,6 @@ const fn is_key_like(v: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use brunch as _;
 
 	#[test]
 	#[allow(clippy::cognitive_complexity)] // It is what it is.

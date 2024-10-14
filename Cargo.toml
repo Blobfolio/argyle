@@ -31,24 +31,8 @@ bash-dir = "./"
 man-dir = "./"
 credits-dir = "./"
 
-[dev-dependencies]
-brunch = "0.6.*"
-
-[[bench]]
-name = "fm_keykind"
-harness = false
-
-[[bench]]
-name = "fm_argue"
-harness = false
-
 [features]
 default = []
 
 # Enables ArgyleError::WantsDynamicHelp variant.
 dynamic-help = []
-
-[profile.bench]
-lto = false
-codegen-units = 1
-opt-level = 3

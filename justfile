@@ -23,25 +23,6 @@ doc_dir     := justfile_directory() + "/doc"
 
 
 
-# Bench it!
-bench BENCH="":
-	#!/usr/bin/env bash
-
-	clear
-	if [ -z "{{ BENCH }}" ]; then
-		cargo bench \
-			--benches \
-			--all-features \
-			--target-dir "{{ cargo_dir }}"
-	else
-		cargo bench \
-			--bench "{{ BENCH }}" \
-			--all-features \
-			--target-dir "{{ cargo_dir }}"
-	fi
-	exit 0
-
-
 # Clean Cargo crap.
 @clean:
 	# Most things go here.
