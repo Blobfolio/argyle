@@ -10,6 +10,7 @@ use std::{
 
 
 #[derive(Debug, Clone)]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Argument `OsStr` Iterator.
 ///
 /// This iterates through the arguments of an [`Argue`](crate::Argue) as [`OsStr`](std::ffi::OsStr) values.
@@ -65,6 +66,7 @@ impl<'a> ArgsOsStr<'a> {
 
 
 #[derive(Debug, Clone, Default)]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Option Values Iterator.
 ///
 /// This iterator yields the value(s) corresponding to a given option, useful
@@ -154,6 +156,7 @@ impl<'a> Options<'a> {
 
 
 #[derive(Debug, Clone, Default)]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Option Values (`OsStr`) Iterator.
 ///
 /// This iterator yields the value(s) corresponding to a given option, useful

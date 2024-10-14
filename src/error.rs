@@ -14,6 +14,7 @@ use std::{
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(not(feature = "dynamic-help"), derive(Copy))]
+#[deprecated(since = "0.9.0", note = "use stream::ArgyleError instead")]
 /// # Error Struct.
 pub enum ArgyleError {
 	/// A custom error.

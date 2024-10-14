@@ -8,13 +8,13 @@
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/argyle/issues)
 
-This crate contains an agnostic CLI argument parser for Unix platforms called `Argue`. Unlike more robust libraries like [clap](https://crates.io/crates/clap), `Argue` does not hold information about expected or required arguments; it merely parses the raw arguments (`std::env::args_os`) into a consistent state so the implementor can query them as needed.
+This crate provides a simple streaming CLI argument parser/iterator called `Argue`, offering a middle ground between the standard library's barebones `std::env::args_os` helper and full-service crates like [clap](https://crates.io/crates/clap).
 
-Post-processing is an exercise largely left to the implementing library to do in its own way, in its own time. [`Argue`] exposes several methods for quickly querying the individual pieces of the set, but it can also be dereferenced to a slice or consumed into an owned vector for fully manual processing if desired.
+`Argue` performs some basic normalization — it handles string conversion in a non-panicking way, recognizes shorthand value assignments like `-kval`, `-k=val`, `--key=val`, and handles end-of-command (`--`) arguments — and will help identify any special subcommands and/or keys/values expected by your app.
 
-Arguments are processed and held as owned bytes rather than (os)strings, again leaving the choice of later conversion entirely up to the implementor.
+The subsequent validation and handling, however, are left _entirely up to you_. Loop, match, and proceed however you see fit.
 
-For simple applications, this agnostic approach can significantly reduce the overhead of processing CLI arguments, but because handling is left to the implementing library, it might be too tedious or limiting for more complex use cases.
+If that sounds terrible, just use [clap](https://crates.io/crates/clap) instead. Haha.
 
 
 
@@ -24,53 +24,68 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-argyle = "0.8.*"
+argyle = "0.9.*"
 ```
 
 
 
 ## Example
 
-A general setup might look something like the following. Refer to the documentation for `Argue` for more information, caveats, etc.
+A general setup might look something like the following.
+
+Refer to the documentation for `Argue` for more information, caveats, etc.
 
 ```rust
-use argyle::{
-    Argue,
-    ArgyleError,
-    FLAG_HELP,
-    FLAG_REQUIRED,
-    FLAG_VERSION,
-};
+use argyle::stream::Argument;
+use std::path::PathBuf;
 
-fn main() {
-    if let Err(e) = _main() {
-        match(e) {
-            // A "-V" or "--version" flag was present.
-            Err(ArgyleError::WantsVersion) => {
-                println!("MyApp v{}", env!("CARGO_PKG_VERSION"));
-            },
-            // A "-h" or "--help" flag was present.
-            Err(ArgyleError::WantsHelp) => {
-                println!("Help stuff goes here...");
-            },
-            // An actual error!
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(1);
-            },
-        }
-    }
+#[derive(Debug, Clone, Default)]
+/// # Configuration.
+struct Settings {
+    threads: usize,
+    verbose: bool,
+    paths: Vec<PathBuf>,
 }
 
-fn _main() -> Result<(), ArgyleError> {
-    // Parse CLI arguments.
-    let args = Argue::new(FLAG_HELP | FLAG_REQUIRED | FLAG_VERSION)?;
+fn main() {
+    let args = argyle::stream::args()
+        .with_keys([
+            ("-h", false),        // Boolean flag.
+            ("--help", false),    // Boolean flag.
+            ("--threads", true),  // Expects a value.
+            ("--verbose", false), // Boolean flag.
+        ])
+        .unwrap(); // An error will only occur if a
+                   // duplicate or invalid key is declared.
 
-    // Pull the pieces you want.
-    let clean: bool = args.switch(b"--clean");
-    let prefix: Option<&[u8]> = args.option2(b"-p", b"--prefix");
+    // Loop and handle!
+    let mut settings = Settings::default();
+    for arg in args {
+        match arg {
+            Argument::Key("-h" | "--help") => {
+                println!("Help Screen Goes Here.");
+                return;
+            },
+            Argument::Key("--verbose") => {
+                settings.verbose = true;
+            },
+            Argument::KeyWithValue("--threads", threads) => {
+                settings.threads = threads.parse().expect("Threads must be a number!");
+            },
+            // Something else… maybe you want to assume it's a path?
+            Argument::Other(v) => {
+                settings.paths.push(PathBuf::from(v));
+            },
+            // Also something else, but not String-able. Paths don't care,
+            // though, so for this example maybe you just keep it?
+            Argument::InvalidUtf8(v) => {
+                settings.paths.push(PathBuf::from(v));
+            },
+            _ => {}, // Not relevant here.
+        }
+    }
 
-    ...
+    // Do something with those settings…
 }
 ```
 
