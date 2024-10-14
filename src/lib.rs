@@ -124,6 +124,7 @@ mod argue;
 mod error;
 mod iter;
 mod keykind;
+pub mod stream;
 
 pub use argue::{
 	Argue,

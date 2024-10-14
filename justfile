@@ -83,6 +83,17 @@ bench BENCH="":
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
 
+# Build and Run Stream Example.
+@debug-stream +ARGS:
+	clear
+	cargo run \
+		-q \
+		--all-features \
+		--release \
+		--example "debug-stream" \
+		--target-dir "{{ cargo_dir }}" \
+		-- {{ ARGS }}
+
 
 # Build and Run Example.
 @debug-args:
