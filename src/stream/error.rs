@@ -2,14 +2,11 @@
 # Argyle: Errors.
 */
 
-use std::{
-	ffi::OsString,
-	fmt,
-};
+use std::fmt;
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 /// # Error!
 pub enum ArgyleError {
 	/// # Duplicate Key.
@@ -17,17 +14,15 @@ pub enum ArgyleError {
 
 	/// # Invalid Key.
 	InvalidKey(&'static str),
-
-	/// # Invalid UTF-8 in Argument.
-	InvalidUtf8(OsString),
 }
+
+impl std::error::Error for ArgyleError {}
 
 impl fmt::Display for ArgyleError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::DuplicateKey(s) => write!(f, "Duplicate key: {s}"),
 			Self::InvalidKey(s) => write!(f, "Invalid key: {s}"),
-			Self::InvalidUtf8(s) => write!(f, "Invalid UTF-8: {s:?}"),
 		}
 	}
 }
