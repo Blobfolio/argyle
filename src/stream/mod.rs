@@ -27,6 +27,14 @@ use std::{
 
 
 
+/// # Alias for Env Args.
+///
+/// This is the return type for [`args`]. It is kinda clunky so downstream
+/// users may want to just use this shorthand instead.
+pub type ArgueEnv = Argue<Skip<ArgsOs>>;
+
+
+
 /// # Streaming Argument Iterator.
 ///
 /// `Argue` occupies the middle ground between [`std::env::args`] and full-service
@@ -190,9 +198,12 @@ impl<I> Argue<I> {
 		keys.into_iter().try_fold(self, Self::with_command)
 	}
 
-	/// # With Boolean Keys.
+	/// # With Keys.
 	///
-	/// Add one or more boolean keys to the watchlist.
+	/// Add one or more keys to the watchlist.
+	///
+	/// If you find the tuples messy, you can use [`Argue::with_switches`] and
+	/// [`Argue::with_options`] to declare your keys instead.
 	///
 	/// ## Examples
 	///
@@ -215,6 +226,60 @@ impl<I> Argue<I> {
 	pub fn with_keys<I2: IntoIterator<Item=(&'static str, bool)>>(self, keys: I2)
 	-> Result<Self, ArgyleError> {
 		keys.into_iter().try_fold(self, |acc, (k, v)| acc.with_key(k, v))
+	}
+
+	/// # With Options.
+	///
+	/// Add one or more keys to the watchlist that require values.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// let args = argyle::stream::args()
+	///     .with_options(["--input", "--output"])
+	///     .unwrap();
+	///
+	/// for arg in args {
+	///     // Do stuff!
+	/// }
+	/// ```
+	///
+	/// ## Errors
+	///
+	/// This will return an error if any of the keys were previously specified
+	/// or contain invalid characters.
+	pub fn with_options<I2: IntoIterator<Item=&'static str>>(self, keys: I2)
+	-> Result<Self, ArgyleError> {
+		keys.into_iter().try_fold(self, |acc, k| acc.with_key(k, true))
+	}
+
+	/// # With Switches.
+	///
+	/// Add one or more boolean keys to the watchlist.
+	///
+	/// This can be used instead of [`Argue::with_keys`] if you have a bunch
+	/// of keys that do not require values. (It saves you the trouble of
+	/// tuple-izing everything.)
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// let args = argyle::stream::args()
+	///     .with_switches(["--verbose", "--strict"])
+	///     .unwrap();
+	///
+	/// for arg in args {
+	///     // Do stuff!
+	/// }
+	/// ```
+	///
+	/// ## Errors
+	///
+	/// This will return an error if any of the keys were previously specified
+	/// or contain invalid characters.
+	pub fn with_switches<I2: IntoIterator<Item=&'static str>>(self, keys: I2)
+	-> Result<Self, ArgyleError> {
+		keys.into_iter().try_fold(self, |acc, k| acc.with_key(k, false))
 	}
 }
 
@@ -578,6 +643,32 @@ mod test {
 			]))
 		);
 		assert!(args.next().is_none());
+	}
+
+	#[test]
+	fn t_argue_with_keys() {
+		// Define keys all together.
+		let arg1 = Argue::from(std::iter::once(OsString::new()))
+			.with_keys([
+				("--switch1", false),
+				("--switch2", false),
+				("--opt1", true),
+				("--opt2", true),
+			])
+			.expect("Argue::with_keys failed.");
+
+		// Define them separately.
+		let arg2 = Argue::from(std::iter::once(OsString::new()))
+			.with_switches(["--switch1", "--switch2"])
+				.expect("Argue::with_switches failed.")
+			.with_options(["--opt1", "--opt2"])
+				.expect("Argue::with_options failed.");
+
+		// The special list should be the same either way.
+		assert_eq!(arg1.special, arg2.special);
+
+		// While we're here, let's make sure we can't repeat a key.
+		assert!(arg2.with_key("--switch1", false).is_err());
 	}
 
 	#[test]
