@@ -1,9 +1,9 @@
 /*!
 # Argyle: Streaming Argument Iterator.
 
-This module contains a streaming alternative to the crate's primary [`Argue`](crate::Argue)
-structure that avoids the overhead associated with argument collection and
-searching.
+This module contains a streaming alternative to the crate's original (and
+deprecated) [`Argue`](crate::Argue) structure that avoids the overhead associated
+with argument collection and searching.
 
 This [`Argue`] is simpler and cleaner than the original, but less agnostic as
 it requires declaring reserved keywords — subcommands, switches, and options —
