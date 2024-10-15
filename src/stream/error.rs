@@ -6,7 +6,7 @@ use std::fmt;
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// # Error!
 pub enum ArgyleError {
 	/// # Duplicate Key.
@@ -23,6 +23,17 @@ impl fmt::Display for ArgyleError {
 		match self {
 			Self::DuplicateKey(s) => write!(f, "Duplicate key: {s}"),
 			Self::InvalidKey(s) => write!(f, "Invalid key: {s}"),
+		}
+	}
+}
+
+impl ArgyleError {
+	#[must_use]
+	/// # As String Slice.
+	pub const fn as_str(&self) -> &'static str {
+		match self {
+			Self::DuplicateKey(_) => "Duplicate key.",
+			Self::InvalidKey(_) => "Invalid key.",
 		}
 	}
 }
