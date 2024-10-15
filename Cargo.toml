@@ -1,9 +1,9 @@
 [package]
 name = "argyle"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.81"
 description = "A lightweight, agnostic CLI argument parser."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/argyle"
@@ -31,24 +31,8 @@ bash-dir = "./"
 man-dir = "./"
 credits-dir = "./"
 
-[dev-dependencies]
-brunch = "0.5.*"
-
-[[bench]]
-name = "fm_keykind"
-harness = false
-
-[[bench]]
-name = "fm_argue"
-harness = false
-
 [features]
 default = []
 
 # Enables ArgyleError::WantsDynamicHelp variant.
 dynamic-help = []
-
-[profile.bench]
-lto = false
-codegen-units = 1
-opt-level = 3

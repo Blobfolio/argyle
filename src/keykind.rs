@@ -5,6 +5,7 @@
 */
 
 #[doc(hidden)]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 #[derive(Debug, Clone, Copy, Default, Eq, Hash, PartialEq)]
 /// The `KeyKind` enum is used to differentiate between the types of CLI argument
 /// keys [`Argue`](crate::Argue) might encounter during parsing (and `None` in the case of a
@@ -60,7 +61,6 @@ impl From<&[u8]> for KeyKind {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use brunch as _;
 
 	#[test]
 	#[allow(clippy::cognitive_complexity)] // It is what it is.

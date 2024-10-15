@@ -34,6 +34,7 @@ use std::{
 
 
 
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Flag: Argument(s) Required.
 ///
 /// If a program is called with zero arguments — no flags, options, trailing
@@ -41,6 +42,7 @@ use std::{
 /// `1`.
 pub const FLAG_REQUIRED: u8 =     0b0000_0001;
 
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Flag: Expect Subcommand.
 ///
 /// Set this flag to treat the first value as a subcommand rather than a
@@ -50,6 +52,7 @@ pub const FLAG_SUBCOMMAND: u8 =   0b0000_0010;
 
 #[cfg(feature = "dynamic-help")]
 #[cfg_attr(docsrs, doc(cfg(feature = "dynamic-help")))]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsDynamicHelp`] if help args
@@ -57,12 +60,14 @@ pub const FLAG_SUBCOMMAND: u8 =   0b0000_0010;
 /// dynamically handle output.
 pub const FLAG_DYNAMIC_HELP: u8 = 0b0000_0100;
 
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Flag: Check For Help Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsHelp`] if help args are
 /// present.
 pub const FLAG_HELP: u8 =         0b0000_1000;
 
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// # Flag: Check For Version Flag.
 ///
 /// When set, [`Argue`] will return [`ArgyleError::WantsVersion`] if version
@@ -101,6 +106,7 @@ const FLAG_ANY_HELP: u8 =         FLAG_HELP;
 
 
 #[derive(Debug, Clone, Default)]
+#[deprecated(since = "0.9.0", note = "use stream::Argue instead")]
 /// `Argue` is an agnostic CLI argument parser. Unlike more robust libraries
 /// like [clap](https://crates.io/crates/clap), `Argue` does not hold
 /// information about expected or required arguments; it merely parses the raw
@@ -1070,7 +1076,6 @@ const fn is_key_like(v: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use brunch as _;
 
 	#[test]
 	#[allow(clippy::cognitive_complexity)] // It is what it is.

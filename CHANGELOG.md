@@ -2,6 +2,34 @@
 
 
 
+## [0.9.0](https://github.com/Blobfolio/argyle/releases/tag/v0.9.0) - 2024-10-14
+
+This release introduces a brand new streaming version of the argument parser `Argue`. It is simpler and cleaner, but works completely differently than the original.
+
+Sorry about that!
+
+Old and new are both present in this release to ease the transition, but projects should migrate to the new version (or another crate) when convenient as the duality won't last.
+
+### New
+
+* `argyle::stream::args`
+* `argyle::stream::Argue`
+* `argyle::stream::Argument`
+* `argyle::stream::ArgyleError`
+
+### Changed
+
+* Bump MSRV to `1.81`
+* Update lints
+
+### Deprecated
+
+* `argyle::Argue`
+* `argyle::ArgyleError`
+* `argyle::KeyKind`
+
+
+
 ## [0.8.1](https://github.com/Blobfolio/argyle/releases/tag/v0.8.1) - 2024-09-05
 
 ### Changed
