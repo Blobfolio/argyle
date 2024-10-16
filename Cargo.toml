@@ -21,9 +21,8 @@ exclude = [
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
-features = [ "dynamic-help" ]
+features = [ "commands" ]
 default-target = "x86_64-unknown-linux-gnu"
-targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [package.metadata.bashman]
 name = "Argyle"
@@ -34,5 +33,6 @@ credits-dir = "./"
 [features]
 default = []
 
-# Enables ArgyleError::WantsDynamicHelp variant.
-dynamic-help = []
+# Enables Argument::Command variant and related methods. Use this if your app
+# accepts commands in addition to -k/--key stuff.
+commands = []

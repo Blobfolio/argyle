@@ -38,9 +38,13 @@ doc_dir     := justfile_directory() + "/doc"
 # Clippy.
 @clippy:
 	clear
+
+	fyi task "No features."
 	cargo clippy \
-		--all-features \
+		--release \
 		--target-dir "{{ cargo_dir }}"
+
+	fyi task "All features."
 	cargo clippy \
 		--release \
 		--all-features \

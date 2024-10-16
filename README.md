@@ -29,6 +29,14 @@ argyle = "0.9.*"
 
 
 
+## Crate Features
+
+| Feature | Description | Default |
+| ------- | ----------- | ------- |
+| `commands` | Enable (sub)command-related handling. | N |
+
+
+
 ## Example
 
 A general setup might look something like the following.
@@ -36,7 +44,7 @@ A general setup might look something like the following.
 Refer to the documentation for `Argue` for more information, caveats, etc.
 
 ```rust
-use argyle::stream::Argument;
+use argyle::Argument;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
@@ -48,15 +56,27 @@ struct Settings {
 }
 
 fn main() {
-    let args = argyle::stream::args()
+    let args = argyle::args()
         .with_keys([
             ("-h", false),        // Boolean flag.
             ("--help", false),    // Boolean flag.
             ("--threads", true),  // Expects a value.
             ("--verbose", false), // Boolean flag.
         ])
-        .unwrap(); // An error will only occur if a
-                   // duplicate or invalid key is declared.
+        .unwrap(); // An error will only occur if a key
+                   // contains invalid characters.
+
+    // If you aren't feeling the tuples, explicit switch/option
+    // methods can be used to accomplish the same thing:
+    let args = argyle::args()
+        .with_switches([
+            "-h",
+            "--help",
+            "--verbose",
+        ])
+        .unwrap()
+        .with_options(["--threads"])
+        .unwrap();
 
     // Loop and handle!
     let mut settings = Settings::default();
@@ -70,18 +90,23 @@ fn main() {
                 settings.verbose = true;
             },
             Argument::KeyWithValue("--threads", threads) => {
-                settings.threads = threads.parse().expect("Threads must be a number!");
+                settings.threads = threads.parse()
+                    .expect("Threads must be a number!");
             },
+
             // Something else… maybe you want to assume it's a path?
             Argument::Other(v) => {
                 settings.paths.push(PathBuf::from(v));
             },
+            
             // Also something else, but not String-able. Paths don't care,
             // though, so for this example maybe you just keep it?
             Argument::InvalidUtf8(v) => {
                 settings.paths.push(PathBuf::from(v));
             },
-            _ => {}, // Not relevant here.
+            
+            // Nothing else is relevant here.
+            _ => {},
         }
     }
 

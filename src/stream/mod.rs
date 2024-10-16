@@ -1,18 +1,10 @@
 /*!
 # Argyle: Streaming Argument Iterator.
-
-This module contains a streaming alternative to the crate's original (and
-deprecated) [`Argue`](crate::Argue) structure that avoids the overhead associated
-with argument collection and searching.
-
-This [`Argue`] is simpler and cleaner than the original, but less agnostic as
-it requires declaring reserved keywords — subcommands, switches, and options —
-upfront (via builder-style methods) to remove the guesswork during iteration.
 */
 
-mod error;
+mod err;
 
-pub use error::ArgyleError;
+pub use err::ArgyleError;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
@@ -63,12 +55,12 @@ pub type ArgueEnv = Argue<Skip<ArgsOs>>;
 /// ## Examples
 ///
 /// ```
-/// use argyle::stream::Argument;
+/// use argyle::Argument;
 ///
 /// // Most of the time you'll probably want to parse env args, which the
 /// // helper method `args` sets up. Add switches, options, etc, then loop to
 /// // see what all comes in!
-/// for arg in argyle::stream::args().with_key("--help", false).unwrap() {
+/// for arg in argyle::args().with_key("--help", false).unwrap() {
 ///     match arg {
 ///         // The user wants help.
 ///         Argument::Key("--help") => println!("Help! Help!"),
@@ -104,25 +96,34 @@ impl<I: IntoIterator<Item=OsString>> From<I> for Argue<I::IntoIter> {
 }
 
 impl<I> Argue<I> {
+	#[cfg(feature = "commands")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 	/// # With (Sub)Command.
 	///
 	/// Add a (sub)command to the watchlist.
 	///
+	/// Commands must start with an ASCII alphanumeric character, and may only
+	/// contain the same, `-`, and `_` thereafter.
+	///
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
-	///     .with_command("make").unwrap();
+	/// use argyle::Argument;
+	/// let args = argyle::args()
+	///     .with_command("make")
+	///     .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::Command("make") => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if the command was previously specified (as
-	/// any type of key) or contains invalid characters.
+	/// This will return an error if the command contains invalid characters.
 	pub fn with_command(mut self, key: &'static str) -> Result<Self, ArgyleError> {
 		let key = key.trim();
 
@@ -130,32 +131,50 @@ impl<I> Argue<I> {
 		if key.is_empty() { Ok(self) }
 		// Call out invalid characters specially.
 		else if ! valid_command(key.as_bytes()) { Err(ArgyleError::InvalidKey(key)) }
-		// Add it if unique!
-		else if self.special.insert(KeyKind::Command(key)) { Ok(self) }
-		// It wasn't unique…
-		else { Err(ArgyleError::DuplicateKey(key)) }
+		// We're good!
+		else {
+			self.special.insert(KeyKind::Command(key));
+			Ok(self)
+		}
 	}
 
 	/// # With Key.
 	///
 	/// Add a key to the watchlist, optionally requiring a value.
 	///
+	/// If you have more than one key to add, consider [`Argue::with_keys`]
+	/// instead.
+	///
+	/// Short keys must be two bytes: a dash and an ASCII alphanumeric
+	/// character.
+	///
+	/// Long keys can be any length but must start with two dashes and an ASCII
+	/// alphanumeric character, followed by any combination of alphanumerics,
+	/// `-`, and `_`.
+	///
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
-	///     .with_key("--verbose", false).unwrap() // Boolean flag.
-	///     .with_key("--output", true).unwrap();  // Expects a value.
+	/// use argyle::Argument;
+	///
+	/// let args = argyle::args()
+	///     .with_key("--verbose", false) // Boolean flag.
+	///     .unwrap()
+	///     .with_key("--output", true)   // Expects a value.
+	///     .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::Key("--verbose") => {},
+	///         Argument::KeyWithValue("--output", value) => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if the key was previously specified
-	/// or contains invalid characters.
+	/// This will return an error if the key contains invalid characters.
 	pub fn with_key(mut self, key: &'static str, value: bool)
 	-> Result<Self, ArgyleError> {
 		let key = key.trim();
@@ -164,16 +183,22 @@ impl<I> Argue<I> {
 		if key.is_empty() { Ok(self) }
 		// Call out invalid characters specially.
 		else if ! valid_key(key.as_bytes()) { Err(ArgyleError::InvalidKey(key)) }
-		// Add it if unique!
+		// We're good!
 		else {
 			let k = if value { KeyKind::KeyWithValue(key) } else { KeyKind::Key(key) };
-			if self.special.insert(k) { Ok(self) }
-			else { Err(ArgyleError::DuplicateKey(key)) }
+
+			// Note: we're using `replace` instead of `insert` here to make
+			// sure the variant matches whichever was last used (in case the
+			// "same" key is submitted multiple times).
+			let _res = self.special.replace(k);
+			Ok(self)
 		}
 	}
 }
 
 impl<I> Argue<I> {
+	#[cfg(feature = "commands")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 	/// # With (Sub)Commands.
 	///
 	/// Add one or more (sub)commands to the watchlist.
@@ -181,18 +206,25 @@ impl<I> Argue<I> {
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
-	///     .with_commands(["help", "verify"]).unwrap();
+	/// use argyle::Argument;
+	///
+	/// let args = argyle::args()
+	///     .with_commands(["help", "verify"])
+	///     .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::Command("help") => {},
+	///         Argument::Command("verify") => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if any of the commands were previously
-	/// specified (as any type of key) or contain invalid characters.
+	/// This will return an error if any of the commands contain invalid
+	/// characters. See [`Argue::with_command`] for more details.
 	pub fn with_commands<I2: IntoIterator<Item=&'static str>>(self, keys: I2)
 	-> Result<Self, ArgyleError> {
 		keys.into_iter().try_fold(self, Self::with_command)
@@ -208,21 +240,28 @@ impl<I> Argue<I> {
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
+	/// use argyle::Argument;
+	///
+	/// let args = argyle::args()
 	///     .with_keys([
 	///         ("--verbose", false), // Boolean flag.
 	///         ("--output", true),   // Expects a value.
-	///      ]).unwrap();
+	///      ])
+	///      .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::Key("--verbose") => {},
+	///         Argument::KeyWithValue("--output", value) => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if any of the keys were previously specified
-	/// or contain invalid characters.
+	/// This will return an error if any of the keys contain invalid
+	/// characters. See [`Argue::with_key`] for more details.
 	pub fn with_keys<I2: IntoIterator<Item=(&'static str, bool)>>(self, keys: I2)
 	-> Result<Self, ArgyleError> {
 		keys.into_iter().try_fold(self, |acc, (k, v)| acc.with_key(k, v))
@@ -235,19 +274,25 @@ impl<I> Argue<I> {
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
+	/// use argyle::Argument;
+	///
+	/// let args = argyle::args()
 	///     .with_options(["--input", "--output"])
 	///     .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::KeyWithValue("--input", value) => {},
+	///         Argument::KeyWithValue("--output", value) => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if any of the keys were previously specified
-	/// or contain invalid characters.
+	/// This will return an error if any of the keys contain invalid
+	/// characters. See [`Argue::with_key`] for more details.
 	pub fn with_options<I2: IntoIterator<Item=&'static str>>(self, keys: I2)
 	-> Result<Self, ArgyleError> {
 		keys.into_iter().try_fold(self, |acc, k| acc.with_key(k, true))
@@ -264,19 +309,25 @@ impl<I> Argue<I> {
 	/// ## Examples
 	///
 	/// ```
-	/// let args = argyle::stream::args()
+	/// use argyle::Argument;
+	///
+	/// let args = argyle::args()
 	///     .with_switches(["--verbose", "--strict"])
 	///     .unwrap();
 	///
 	/// for arg in args {
-	///     // Do stuff!
+	///     match arg {
+	///         Argument::Key("--verbose") => {},
+	///         Argument::Key("--strict") => {},
+	///         _ => {}, // Other stuff.
+	///     }
 	/// }
 	/// ```
 	///
 	/// ## Errors
 	///
-	/// This will return an error if any of the keys were previously specified
-	/// or contain invalid characters.
+	/// This will return an error if any of the keys contain invalid
+	/// characters. See [`Argue::with_key`] for more details.
 	pub fn with_switches<I2: IntoIterator<Item=&'static str>>(self, keys: I2)
 	-> Result<Self, ArgyleError> {
 		keys.into_iter().try_fold(self, |acc, k| acc.with_key(k, false))
@@ -346,7 +397,10 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 
 				// Return whatever we're meant to based on the match type.
 				return Some(match key {
+					#[cfg(feature = "commands")]
+					#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 					KeyKind::Command(_) => Argument::Command(k),
+
 					KeyKind::Key(_) => Argument::Key(k),
 					KeyKind::KeyWithValue(_) => {
 						// We need a value for this one!
@@ -386,7 +440,6 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 
 
 
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// # Parsed Argument.
 ///
@@ -394,6 +447,8 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 /// probably want to use a `match` and take the appropriate action given the
 /// classification.
 pub enum Argument {
+	#[cfg(feature = "commands")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 	/// # (Sub)command.
 	///
 	/// This is for arguments matching keywords declared via [`Argue::with_command`]
@@ -441,9 +496,9 @@ pub enum Argument {
 	/// ## Example
 	///
 	/// ```
-	/// use argyle::stream::{Argue, Argument};
+	/// use argyle::{Argue, Argument};
 	///
-	/// let mut args = argyle::stream::args();
+	/// let mut args = argyle::args();
 	/// if let Some(Argument::End(extra)) = args.next() {
 	///     for arg in Argue::from(extra.into_iter()) {
 	///         // Do more stuff!
@@ -459,10 +514,10 @@ pub enum Argument {
 /// # CLI Argument Iterator.
 ///
 /// Return an [`Argue`] iterator seeded with [`ArgsOs`], skipping the first
-/// (command path) entry.
+/// entry — the script path — since that isn't super useful.
 ///
-/// If you'd rather not skip that first entry, create your instance with
-/// `Argue::from(std::env::args_os())` instead.
+/// (If you disagree on that last point, create your instance using
+/// `Argue::from(std::env::args_os())` instead.)
 pub fn args() -> Argue<Skip<ArgsOs>> {
 	Argue {
 		iter: std::env::args_os().skip(1),
@@ -479,6 +534,7 @@ pub fn args() -> Argue<Skip<ArgsOs>> {
 /// type-independent matching with the option of subsequently giving a shit
 /// about said types. Haha.
 enum KeyKind {
+	#[cfg(feature = "commands")]
 	/// # (Sub)command.
 	Command(&'static str),
 
@@ -511,16 +567,26 @@ impl PartialOrd for KeyKind {
 }
 
 impl KeyKind {
+	#[cfg(feature = "commands")]
 	/// # As String Slice.
 	///
 	/// Return the inner value of the key.
 	const fn as_str(&self) -> &'static str {
 		match self { Self::Command(s) | Self::Key(s) | Self::KeyWithValue(s) => s }
 	}
+
+	#[cfg(not(feature = "commands"))]
+	/// # As String Slice.
+	///
+	/// Return the inner value of the key.
+	const fn as_str(&self) -> &'static str {
+		match self { Self::Key(s) | Self::KeyWithValue(s) => s }
+	}
 }
 
 
 
+#[cfg(feature = "commands")]
 /// # Valid Command?
 const fn valid_command(mut key: &[u8]) -> bool {
 	// The first character must be alphanumeric.
@@ -573,12 +639,11 @@ const fn valid_key_byte(b: u8) -> bool {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use std::ffi::OsStr;
 
 	#[test]
 	fn t_argue() {
-		use std::ffi::OsStr;
 		let mut cli = vec![
-			OsStr::new("subcommand").to_owned(),
 			OsStr::new("").to_owned(),
 			OsStr::new("-s").to_owned(),
 			OsStr::new("--long").to_owned(),
@@ -592,7 +657,6 @@ mod test {
 			OsStr::new("--").to_owned(),
 		];
 		let mut args = Argue::from(cli.iter().cloned())
-			.with_command("subcommand").unwrap()
 			.with_keys([
 				("--long", false),
 				("--m", true),
@@ -602,7 +666,6 @@ mod test {
 				("-u", true),
 			]).unwrap();
 
-		assert_eq!(args.next(), Some(Argument::Command("subcommand")));
 		assert_eq!(args.next(), Some(Argument::Key("-s")));
 		assert_eq!(args.next(), Some(Argument::Key("--long")));
 		assert_eq!(args.next(), Some(Argument::KeyWithValue("-t", "2".to_owned())));
@@ -617,7 +680,6 @@ mod test {
 		cli.push(OsStr::new("--m=yar").to_owned());
 
 		let mut args = Argue::from(cli.into_iter())
-			.with_command("subcommand").unwrap()
 			.with_keys([
 				("--long", false),
 				("--m", true),
@@ -627,7 +689,6 @@ mod test {
 				("-u", true),
 			]).unwrap();
 
-		assert_eq!(args.next(), Some(Argument::Command("subcommand")));
 		assert_eq!(args.next(), Some(Argument::Key("-s")));
 		assert_eq!(args.next(), Some(Argument::Key("--long")));
 		assert_eq!(args.next(), Some(Argument::KeyWithValue("-t", "2".to_owned())));
@@ -642,6 +703,23 @@ mod test {
 				OsStr::new("--m=yar").to_owned(),
 			]))
 		);
+		assert!(args.next().is_none());
+	}
+
+	#[test]
+	#[cfg(feature = "commands")]
+	fn t_argue_with_command() {
+		let cli = vec![
+			OsStr::new("subcommand").to_owned(),
+			OsStr::new("").to_owned(),
+			OsStr::new("-s").to_owned(),
+		];
+		let mut args = Argue::from(cli.iter().cloned())
+			.with_command("subcommand").unwrap()
+			.with_key("-s", false).unwrap();
+
+		assert_eq!(args.next(), Some(Argument::Command("subcommand")));
+		assert_eq!(args.next(), Some(Argument::Key("-s")));
 		assert!(args.next().is_none());
 	}
 
@@ -666,9 +744,6 @@ mod test {
 
 		// The special list should be the same either way.
 		assert_eq!(arg1.special, arg2.special);
-
-		// While we're here, let's make sure we can't repeat a key.
-		assert!(arg2.with_key("--switch1", false).is_err());
 	}
 
 	#[test]
