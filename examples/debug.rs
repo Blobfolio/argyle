@@ -5,7 +5,7 @@ This example parses any arbitrary arguments fed to it and displays the results.
 */
 
 fn main() {
-	for arg in argyle::stream::args() {
+	for arg in argyle::args() {
 		println!("\x1b[2m-----\x1b[0m\n{arg:?}");
 	}
 	println!("\x1b[2m-----\x1b[0m");

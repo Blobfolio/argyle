@@ -2,6 +2,14 @@
 
 
 
+## [0.10.0](https://github.com/Blobfolio/argyle/releases/tag/v0.10.0) - 2024-10-17
+
+This release finishes the work of the last one. The streaming version of `Argue` is now stable and all there is; the old methods and structs have been removed.
+
+Check out the [docs](https://docs.rs/argyle/latest/argyle/) to see how it all works!
+
+
+
 ## [0.9.0](https://github.com/Blobfolio/argyle/releases/tag/v0.9.0) - 2024-10-14
 
 This release introduces a brand new streaming version of the argument parser `Argue`. It is simpler and cleaner, but works completely differently than the original.

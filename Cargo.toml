@@ -1,6 +1,6 @@
 [package]
 name = "argyle"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.81"
@@ -21,18 +21,10 @@ exclude = [
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
-features = [ "dynamic-help" ]
 default-target = "x86_64-unknown-linux-gnu"
-targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [package.metadata.bashman]
 name = "Argyle"
 bash-dir = "./"
 man-dir = "./"
 credits-dir = "./"
-
-[features]
-default = []
-
-# Enables ArgyleError::WantsDynamicHelp variant.
-dynamic-help = []
