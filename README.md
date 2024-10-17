@@ -29,14 +29,6 @@ argyle = "0.9.*"
 
 
 
-## Crate Features
-
-| Feature | Description | Default |
-| ------- | ----------- | ------- |
-| `commands` | Enable (sub)command-related handling. | N |
-
-
-
 ## Example
 
 A general setup might look something like the following.
@@ -57,10 +49,10 @@ struct Settings {
 
 let args = argyle::args()
     .with_keywords([
-        KeyWord::Key("-h"),          // Boolean flag (short).
-        KeyWord::Key("--help"),      // Boolean flag (long).
-        KeyWord::KeyWithValue("-j"), // Expects a value.
-        KeyWord::KeyWithValue("--threads"),
+        KeyWord::key("-h").unwrap(),            // Boolean flag (short).
+        KeyWord::key("--help").unwrap(),        // Boolean flag (long).
+        KeyWord::key_with_value("-j").unwrap(), // Expects a value.
+        KeyWord::key_with_value("--threads").unwrap(),
     ]);
 
 // Loop and handle!

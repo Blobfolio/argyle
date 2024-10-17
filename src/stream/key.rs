@@ -2,34 +2,42 @@
 # Argyle: Keywords.
 */
 
-use crate::ArgyleError;
 use std::{
 	borrow::Borrow,
 	cmp::Ordering,
+	collections::BTreeMap,
+	fmt,
+	path::Path,
 };
 
 
 
 #[derive(Debug, Clone, Copy)]
-/// # Keywords.
+/// # Keyword.
 ///
-/// This enum is used by [`Argue`](crate::Argue) for keyword identification.
+/// This enum is used by [`Argue::with_keywords`](crate::Argue::with_keywords)
+/// to declare the special CLI (sub)commands and/or keys used by the app.
 ///
-/// Note: for equality/ordering purposes, the variants are irrelevant; only the
-/// iner string slices are compared. For example:
+/// Each variant has its own formatting requirements, so it is recommended you
+/// create new instances using the [`KeyWord::command`], [`KeyWord::key`], and
+/// [`KeyWord::key_with_value`] methods rather than populating variants
+/// directly.
+///
+/// For a compile-time alternative, see [`KeyWordsBuilder`].
+///
+/// Note that for the purposes of equality and ordering, the variants are
+/// irrelevant; only the words are used.
+///
+/// For example, the following are "equal" despite one requiring a value and
+/// one not.
 ///
 /// ```
-/// use argyle::KeyWord;
-///
-/// // These are equal because they both resolve to "--help".
 /// assert_eq!(
-///     KeyWord::Key("--help"),
-///     KeyWord::KeyWithValue("--help"),
+///     argyle::KeyWord::key("--help"),
+///     argyle::KeyWord::key_with_value("--help"),
 /// );
 /// ```
 pub enum KeyWord {
-	#[cfg(feature = "commands")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 	/// # (Sub)command.
 	Command(&'static str),
 
@@ -63,125 +71,92 @@ impl PartialOrd for KeyWord {
 }
 
 impl KeyWord {
-	#[cfg(feature = "commands")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
-	/// # New (Sub)Command (Checked).
+	#[must_use]
+	/// # New (Sub)Command.
 	///
-	/// Use this method to create a new (sub)command keyword that is
-	/// guaranteed to be semantically valid.
+	/// Validate and return a new (sub)command keyword, or `None` if invalid.
 	///
-	/// That is, commands may only contain ASCII alphanumeric characters, `-`,
+	/// (Sub)commands may only contain ASCII alphanumeric characters, `-`,
 	/// and `_`, and must begin with an alphanumeric.
 	///
-	/// In practice, most command-like strings will match just fine even if
-	/// these rules are ignored, but they might not.
-	///
 	/// ## Examples
 	///
 	/// ```
 	/// use argyle::KeyWord;
 	///
-	/// // Checking doesn't much matter here:
-	/// assert_eq!(
-	///     KeyWord::checked_command("make").unwrap(),
-	///     KeyWord::Command("make"),
-	/// );
+	/// // Totally fine.
+	/// assert!(KeyWord::command("make").is_some());
 	///
-	/// // But would save you from mistakes like this:
-	/// assert!(KeyWord::checked_command("--help").is_err());
+	/// // This, however, does not work.
+	/// assert!(KeyWord::command("--help").is_none());
 	/// ```
 	///
-	/// ## Errors
-	///
-	/// This will return an error if the command contains invalid characters.
-	pub const fn checked_command(keyword: &'static str) -> Result<Self, ArgyleError> {
-		if let [b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9', rest @ ..] = keyword.as_bytes() {
-			if valid_suffix(rest) { return Ok(Self::Command(keyword)); }
-		}
-
-		Err(ArgyleError::InvalidKeyWord(keyword))
+	/// For a compile-time alternative, see [`KeyWordsBuilder`].
+	pub const fn command(word: &'static str) -> Option<Self> {
+		if valid_command(word.as_bytes()) { Some(Self::Command(word)) }
+		else { None }
 	}
 
-	/// # New Boolean Key (Checked).
+	#[must_use]
+	/// # New Boolean Key.
 	///
-	/// Use this method to create a new boolean key(word) that is
-	/// guaranteed to be semantically valid.
+	/// Validate and return a new boolean/switch keyword — a flag that stands
+	/// on its own — or `None` if invalid.
 	///
-	/// For short keys, that means one dash and one ASCII alphanumeric
-	/// character.
-	///
-	/// For long keys, that means two dashes, one ASCII alphanumeric character,
-	/// and any number of alphanumerics, `-`, and `_`.
-	///
-	/// Key/value splitting, in particular, depends on these rules, so if you
-	/// manually declare something like `KeyWord::Key(-björk)`, matching will
-	/// be inconsistent.
+	/// Both long and short style keys are supported:
+	/// * Short keys must be two bytes: a dash and an ASCII alphanumeric character.
+	/// * Long keys can be any length, but must start with two dashes and an ASCII alphanumeric character; all other characters must be alphanumerics, `-`, and `_`.
 	///
 	/// ## Examples
 	///
 	/// ```
 	/// use argyle::KeyWord;
 	///
-	/// // Checking doesn't much matter here:
-	/// assert_eq!(
-	///     KeyWord::checked_key("--help").unwrap(),
-	///     KeyWord::Key("--help"),
-	/// );
+	/// // Totally fine.
+	/// assert!(KeyWord::key("--help").is_some());
 	///
-	/// // But would save you from mistakes like this:
-	/// assert!(KeyWord::checked_key("-help").is_err());
+	/// // These, however, do not work.
+	/// assert!(KeyWord::key("--björk").is_none());
+	/// assert!(KeyWord::key("-too_long_to_be_short").is_none());
 	/// ```
 	///
-	/// ## Errors
-	///
-	/// This will return an error if the key contains invalid characters.
-	pub const fn checked_key(keyword: &'static str) -> Result<Self, ArgyleError> {
-		if valid_key(keyword.as_bytes()) { Ok(Self::Key(keyword)) }
-		else { Err(ArgyleError::InvalidKeyWord(keyword)) }
+	/// For a compile-time alternative, see [`KeyWordsBuilder`].
+	pub const fn key(keyword: &'static str) -> Option<Self> {
+		if valid_key(keyword.as_bytes()) { Some(Self::Key(keyword)) }
+		else { None }
 	}
 
-	/// # New Key w/ Value (Checked).
+	#[must_use]
+	/// # New Option Key.
 	///
-	/// Use this method to create a new option key(word) that is guaranteed to
-	/// be semantically valid.
+	/// Validate and return a new option keyword — a key that expects a value —
+	/// or `None` if invalid.
 	///
-	/// For short keys, that means one dash and one ASCII alphanumeric
-	/// character.
-	///
-	/// For long keys, that means two dashes, one ASCII alphanumeric character,
-	/// and any number of alphanumerics, `-`, and `_`.
-	///
-	/// Key/value splitting, in particular, depends on these rules, so if you
-	/// manually declare something like `KeyWord::Key(-björk)`, matching will
-	/// be inconsistent.
+	/// Both long and short style keys are supported:
+	/// * Short keys must be two bytes: a dash and an ASCII alphanumeric character.
+	/// * Long keys can be any length, but must start with two dashes and an ASCII alphanumeric character; all other characters must be alphanumerics, `-`, and `_`.
 	///
 	/// ## Examples
 	///
 	/// ```
 	/// use argyle::KeyWord;
 	///
-	/// // Checking doesn't much matter here:
-	/// assert_eq!(
-	///     KeyWord::checked_key_with_value("--output").unwrap(),
-	///     KeyWord::KeyWithValue("--output"),
-	/// );
+	/// // Totally fine.
+	/// assert!(KeyWord::key_with_value("--help").is_some());
 	///
-	/// // But would save you from mistakes like this:
-	/// assert!(KeyWord::checked_key_with_value("-output").is_err());
+	/// // These, however, do not work.
+	/// assert!(KeyWord::key_with_value("--björk").is_none());
+	/// assert!(KeyWord::key_with_value("-too_long_to_be_short").is_none());
 	/// ```
 	///
-	/// ## Errors
-	///
-	/// This will return an error if the key contains invalid characters.
-	pub const fn checked_key_with_value(keyword: &'static str)
-	-> Result<Self, ArgyleError> {
-		if valid_key(keyword.as_bytes()) { Ok(Self::KeyWithValue(keyword)) }
-		else { Err(ArgyleError::InvalidKeyWord(keyword)) }
+	/// For a compile-time alternative, see [`KeyWordsBuilder`].
+	pub const fn key_with_value(keyword: &'static str) -> Option<Self> {
+		if valid_key(keyword.as_bytes()) { Some(Self::KeyWithValue(keyword)) }
+		else { None }
 	}
 }
 
 impl KeyWord {
-	#[cfg(feature = "commands")]
 	#[must_use]
 	/// # As String Slice.
 	///
@@ -189,18 +164,219 @@ impl KeyWord {
 	pub const fn as_str(&self) -> &'static str {
 		match self { Self::Command(s) | Self::Key(s) | Self::KeyWithValue(s) => s }
 	}
+}
 
-	#[cfg(not(feature = "commands"))]
+
+
+#[derive(Debug, Default, Clone)]
+/// # Compile-Time [`KeyWord`]s Codegen.
+///
+/// This struct can be used by build scripts to generate a [`KeyWord`] array
+/// suitable for use with [`Argue::with_keywords`](crate::Argue::with_keywords).
+///
+/// It provides the same semantic safety guarantees as [`KeyWord::key`]
+/// and family, but at compile-time, eliminating the (mild) runtime overhead.
+///
+/// The builder also frees you from [`KeyWord`]'s usual `&'static` lifetime
+/// constraints, allowing for more programmatic population.
+///
+/// ## Examples
+///
+/// ```
+/// use argyle::KeyWordsBuilder;
+///
+/// // Start by adding your keywords.
+/// let mut words = KeyWordsBuilder::default();
+/// for i in 0..10_u8 {
+///     words.push_key(format!("-{i}")); // Automation for the win!
+/// }
+/// ```
+///
+/// You can grab a copy of the code by leveraging `Display::to_string`, but in
+/// most cases you'll probably just want to use [`KeyWordsBuilder::save`] to write
+/// it straight to a file:
+///
+/// ```ignore
+/// let out_dir: &Path = std::env::var("OUT_DIR").unwrap().as_ref();
+/// words.save(out_dir.join("keyz.rs"));
+/// ```
+///
+/// Having done that, just `include!` it where needed:
+///
+/// ```ignore
+/// let ags = argyle::args()
+///     .with_keywords(include!(concat!(env!("OUT_DIR"), "/keyz.rs")));
+/// ```
+pub struct KeyWordsBuilder(BTreeMap<String, String>);
+
+impl fmt::Display for KeyWordsBuilder {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("[")?;
+
+		let mut iter = self.0.values();
+		if let Some(v) = iter.next() {
+			// Write the first value.
+			<String as fmt::Display>::fmt(v, f)?;
+
+			// Write the rest with leading comma/space separators.
+			for v in iter {
+				f.write_str(", ")?;
+				<String as fmt::Display>::fmt(v, f)?;
+			}
+		}
+
+		f.write_str("]")
+	}
+}
+
+impl KeyWordsBuilder {
+	#[inline]
 	#[must_use]
-	/// # As String Slice.
+	/// # Is Empty?
 	///
-	/// Return the keyword's inner value.
-	pub const fn as_str(&self) -> &'static str {
-		match self { Self::Key(s) | Self::KeyWithValue(s) => s }
+	/// Returns `true` if there are no keywords.
+	pub fn is_empty(&self) -> bool { self.0.is_empty() }
+
+	#[inline]
+	#[must_use]
+	/// # Length.
+	///
+	/// Returns the number of keywords currently in the set.
+	pub fn len(&self) -> usize { self.0.len() }
+}
+
+impl KeyWordsBuilder {
+	/// # Add Keyword.
+	///
+	/// Add a keyword, ensuring the string portion is unique.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the string part is not unique.
+	fn push(&mut self, k: &str, v: String) {
+		assert!(! self.0.contains_key(k), "Duplicate key: {k}");
+		self.0.insert(k.to_owned(), v);
+	}
+
+	/// # Add a Command.
+	///
+	/// Use this to add a [`KeyWord::Command`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the command is invalid or repeated;
+	pub fn push_command<S: AsRef<str>>(&mut self, key: S) {
+		let k: &str = key.as_ref().trim();
+		assert!(valid_command(k.as_bytes()), "Invalid command: {k}");
+		let v = format!("argyle::KeyWord::Command({k:?})");
+		self.push(k, v);
+	}
+
+	/// # Add Commands.
+	///
+	/// Use this to add one or more [`KeyWord::Command`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if any commands are invalid or repeated;
+	pub fn push_commands<I: IntoIterator<Item=S>, S: AsRef<str>>(&mut self, keys: I) {
+		for k in keys { self.push_command(k); }
+	}
+
+	/// # Add a Boolean Key.
+	///
+	/// Use this to add a [`KeyWord::Key`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the key is invalid or repeated.
+	pub fn push_key<S: AsRef<str>>(&mut self, key: S) {
+		let k: &str = key.as_ref().trim();
+		assert!(valid_key(k.as_bytes()), "Invalid key: {k}");
+		let v = format!("argyle::KeyWord::Key({k:?})");
+		self.push(k, v);
+	}
+
+	/// # Add Boolean Keys.
+	///
+	/// Use this to add one or more [`KeyWord::Key`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if any keys are invalid or repeated.
+	pub fn push_keys<I: IntoIterator<Item=S>, S: AsRef<str>>(&mut self, keys: I) {
+		for k in keys { self.push_key(k); }
+	}
+
+	/// # Add a Key that Expects a Value.
+	///
+	/// Use this to add a [`KeyWord::KeyWithValue`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the key is invalid or repeated.
+	pub fn push_key_with_value<S: AsRef<str>>(&mut self, key: S) {
+		let k: &str = key.as_ref().trim();
+		assert!(valid_key(k.as_bytes()), "Invalid key: {k}");
+		let v = format!("argyle::KeyWord::KeyWithValue({k:?})");
+		self.push(k, v);
+	}
+
+	/// # Add Keys that Expect Values.
+	///
+	/// Use this to add one or more [`KeyWord::KeyWithValue`] to the list.
+	///
+	/// ## Panics
+	///
+	/// This will panic if any keys are invalid or repeated.
+	pub fn push_keys_with_values<I: IntoIterator<Item=S>, S: AsRef<str>>(&mut self, keys: I) {
+		for k in keys { self.push_key_with_value(k); }
+	}
+}
+
+impl KeyWordsBuilder {
+	/// # Save it to a File!
+	///
+	/// Generate and save the [`KeyWord`] array code to the specified file.
+	///
+	/// Note that many environments prohibit writes to arbitrary locations; for
+	/// best results, your path should be somewhere under `OUT_DIR`.
+	///
+	/// ## Examples
+	///
+	/// ```ignore
+	/// let out_dir: &Path = std::env::var("OUT_DIR").unwrap().as_ref();
+	/// words.save(out_dir.join("keyz.rs"));
+	/// ```
+	///
+	/// ## Panics
+	///
+	/// This method will panic if the write fails for any reason.
+	pub fn save<P: AsRef<Path>>(&self, file: P) {
+		use std::io::Write;
+
+		let file = file.as_ref();
+		let code = self.to_string();
+
+		// Save it!
+		assert!(
+			std::fs::File::create(file).and_then(|mut out|
+				out.write_all(code.as_bytes()).and_then(|()| out.flush())
+			).is_ok(),
+			"Unable to write to {file:?}.",
+		);
 	}
 }
 
 
+
+/// # Valid Command?
+const fn valid_command(bytes: &[u8]) -> bool {
+	if let [b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9', rest @ ..] = bytes {
+		valid_suffix(rest)
+	}
+	else { false }
+}
 
 /// # Valid Key?
 const fn valid_key(bytes: &[u8]) -> bool {
@@ -297,5 +473,77 @@ mod test {
 		assert!(! valid_key(b"-"));
 		assert!(! valid_key(b"--"));
 		assert!(! valid_key(b"---"));
+	}
+
+	#[test]
+	fn t_builder() {
+		let mut builder = KeyWordsBuilder::default();
+		assert_eq!(builder.to_string(), "[]"); // Empty.
+
+		builder.push_key("-h");
+		assert_eq!(builder.to_string(), "[argyle::KeyWord::Key(\"-h\")]");
+
+		builder.push_key("--help");
+		assert_eq!(
+			builder.to_string(),
+			"[argyle::KeyWord::Key(\"--help\"), argyle::KeyWord::Key(\"-h\")]"
+		);
+
+		builder.push_key_with_value("--output");
+		assert_eq!(
+			builder.to_string(),
+			"[argyle::KeyWord::Key(\"--help\"), argyle::KeyWord::KeyWithValue(\"--output\"), argyle::KeyWord::Key(\"-h\")]"
+		);
+
+		builder.push_command("make");
+		assert_eq!(
+			builder.to_string(),
+			"[argyle::KeyWord::Key(\"--help\"), argyle::KeyWord::KeyWithValue(\"--output\"), argyle::KeyWord::Key(\"-h\"), argyle::KeyWord::Command(\"make\")]"
+		);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_builder_invalid() {
+		let mut builder = KeyWordsBuilder::default();
+		builder.push_key("--Björk"); // Invalid characters.
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_builder_duplicate() {
+		let mut builder = KeyWordsBuilder::default();
+		builder.push_key("--help");
+		builder.push_key_with_value("--help"); // Repeated string.
+	}
+
+	#[test]
+	fn t_builder_plural() {
+		let mut builder1 = KeyWordsBuilder::default();
+		builder1.push_key("-h");
+		builder1.push_key("--help");
+
+		let mut builder2 = KeyWordsBuilder::default();
+		builder2.push_keys(["-h", "--help"]);
+
+		assert_eq!(builder1.to_string(), builder2.to_string());
+
+		builder1 = KeyWordsBuilder::default();
+		builder1.push_key_with_value("-o");
+		builder1.push_key_with_value("--output");
+
+		builder2 = KeyWordsBuilder::default();
+		builder2.push_keys_with_values(["-o", "--output"]);
+
+		assert_eq!(builder1.to_string(), builder2.to_string());
+
+		builder1 = KeyWordsBuilder::default();
+		builder1.push_command("build");
+		builder1.push_command("check");
+
+		builder2 = KeyWordsBuilder::default();
+		builder2.push_commands(["build", "check"]);
+
+		assert_eq!(builder1.to_string(), builder2.to_string());
 	}
 }

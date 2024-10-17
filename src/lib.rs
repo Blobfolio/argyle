@@ -19,19 +19,11 @@ If that sounds terrible, just use [clap](https://crates.io/crates/clap) instead.
 
 
 
-## Crate Features
-
-| Feature | Description | Default |
-| ------- | ----------- | ------- |
-| `commands` | Enable (sub)command-related handling. | N |
-
-
-
 ## Example
 
 A general setup might look something like the following.
 
-Refer to the documentation for [`Argue`], [`KeyWord`], and [`Argumuent`] for more information, caveats, etc.
+Refer to the documentation for [`Argue`], [`KeyWord`], and [`Argument`] for more information, caveats, etc.
 
 ```
 use argyle::{Argument, KeyWord};
@@ -47,10 +39,10 @@ struct Settings {
 
 let args = argyle::args()
     .with_keywords([
-        KeyWord::Key("-h"),          // Boolean flag (short).
-        KeyWord::Key("--help"),      // Boolean flag (long).
-        KeyWord::KeyWithValue("-j"), // Expects a value.
-        KeyWord::KeyWithValue("--threads"),
+        KeyWord::key("-h").unwrap(),            // Boolean flag (short).
+        KeyWord::key("--help").unwrap(),        // Boolean flag (long).
+        KeyWord::key_with_value("-j").unwrap(), // Expects a value.
+        KeyWord::key_with_value("--threads").unwrap(),
     ]);
 
 // Loop and handle!
@@ -140,8 +132,6 @@ for arg in args {
 
 #![expect(clippy::module_name_repetitions, reason = "Repetition is preferred.")]
 
-#![cfg_attr(docsrs, feature(doc_cfg))]
-
 
 
 mod stream;
@@ -150,6 +140,6 @@ pub use stream::{
 	Argue,
 	ArgueEnv,
 	Argument,
-	ArgyleError,
 	KeyWord,
+	KeyWordsBuilder,
 };

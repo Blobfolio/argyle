@@ -2,11 +2,12 @@
 # Argyle: Streaming Argument Iterator.
 */
 
-mod err;
 mod key;
 
-pub use err::ArgyleError;
-pub use key::KeyWord;
+pub use key::{
+	KeyWord,
+	KeyWordsBuilder,
+};
 use std::{
 	collections::BTreeSet,
 	env::ArgsOs,
@@ -56,8 +57,8 @@ pub type ArgueEnv = Argue<Skip<ArgsOs>>;
 /// // see what all comes in!
 /// let args = argyle::args()
 ///     .with_keywords([
-///         KeyWord::Key("--version"),
-///         KeyWord::Key("--help"),
+///         KeyWord::key("--version").unwrap(),
+///         KeyWord::key("--help").unwrap(),
 ///     ]);
 ///
 /// for arg in args {
@@ -111,12 +112,12 @@ impl<I> Argue<I> {
 	/// let args = argyle::args()
 	///     .with_keywords([
 	///         // Boolean keys:
-	///         KeyWord::Key("--help"),
-	///         KeyWord::Key("-h"),
+	///         KeyWord::key("--help").unwrap(),
+	///         KeyWord::key("-h").unwrap(),
 	///
 	///         // Keys that expect a value:
-	///         KeyWord::KeyWithValue("-o"),
-	///         KeyWord::KeyWithValue("--output"),
+	///         KeyWord::key_with_value("-o").unwrap(),
+	///         KeyWord::key_with_value("--output").unwrap(),
 	///      ]);
 	///
 	/// for arg in args {
@@ -130,7 +131,7 @@ impl<I> Argue<I> {
 	pub fn with_keywords<I2: IntoIterator<Item=KeyWord>>(mut self, keys: I2) -> Self {
 		for key in keys {
 			// Note: we're using `replace` instead of `insert` to keep the
-			// variant synced.
+			// variants synced.
 			let _res = self.keys.replace(key);
 		}
 
@@ -201,10 +202,7 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 
 				// Return whatever we're meant to based on the match type.
 				return Some(match key {
-					#[cfg(feature = "commands")]
-					#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 					KeyWord::Command(_) => Argument::Command(k),
-
 					KeyWord::Key(_) => Argument::Key(k),
 					KeyWord::KeyWithValue(_) => {
 						// We need a value for this one!
@@ -251,8 +249,6 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 /// probably want to use a `match` and take the appropriate action given the
 /// classification.
 pub enum Argument {
-	#[cfg(feature = "commands")]
-	#[cfg_attr(docsrs, doc(cfg(feature = "commands")))]
 	/// # (Sub)command.
 	///
 	/// This is for arguments matching a [`KeyWord::Command`].

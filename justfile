@@ -38,16 +38,8 @@ doc_dir     := justfile_directory() + "/doc"
 # Clippy.
 @clippy:
 	clear
-
-	fyi task "No features."
 	cargo clippy \
 		--release \
-		--target-dir "{{ cargo_dir }}"
-
-	fyi task "All features."
-	cargo clippy \
-		--release \
-		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 
@@ -62,7 +54,6 @@ doc_dir     := justfile_directory() + "/doc"
 	clear
 	cargo run \
 		-q \
-		--all-features \
 		--release \
 		--example "debug" \
 		--target-dir "{{ cargo_dir }}" \
@@ -71,16 +62,9 @@ doc_dir     := justfile_directory() + "/doc"
 
 # Build Docs.
 @doc:
-	# Make sure nightly is installed; this version generates better docs.
-	env RUSTUP_PERMIT_COPY_RENAME=true rustup install nightly
-
-	# Make the docs.
-	cargo +nightly rustdoc \
+	cargo rustdoc \
 		--release \
-		--all-features \
-		--target-dir "{{ cargo_dir }}" \
-		-- \
-		--cfg docsrs
+		--target-dir "{{ cargo_dir }}"
 
 	# Move the docs and clean up ownership.
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"
