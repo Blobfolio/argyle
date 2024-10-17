@@ -10,7 +10,7 @@ use std::fmt;
 /// # Error!
 pub enum ArgyleError {
 	/// # Invalid Key.
-	InvalidKey(&'static str),
+	InvalidKeyWord(&'static str),
 }
 
 impl std::error::Error for ArgyleError {}
@@ -18,7 +18,7 @@ impl std::error::Error for ArgyleError {}
 impl fmt::Display for ArgyleError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::InvalidKey(s) => write!(f, "Invalid key: {s}"),
+			Self::InvalidKeyWord(s) => write!(f, "Invalid keyword: {s}"),
 		}
 	}
 }
@@ -27,7 +27,7 @@ impl ArgyleError {
 	#[must_use]
 	/// # As String Slice.
 	pub const fn as_str(&self) -> &'static str {
-		"Invalid key."
+		"Invalid keyword."
 
 		/*match self {
 			Self::InvalidKey(_) => "Invalid key.",

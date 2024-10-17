@@ -10,7 +10,7 @@
 
 This crate provides a simple streaming CLI argument parser/iterator called `Argue`, offering a middle ground between the standard library's barebones `std::env::args_os` helper and full-service crates like [clap](https://crates.io/crates/clap).
 
-`Argue` performs some basic normalization — it handles string conversion in a non-panicking way, recognizes shorthand value assignments like `-kval`, `-k=val`, `--key=val`, and handles end-of-command (`--`) arguments — and will help identify any special subcommands and/or keys/values expected by your app.
+`Argue` performs some basic normalization — it handles string conversion in a non-panicking way, recognizes shorthand value assignments like `-kval`, `-k=val`, `--key=val`, and handles end-of-command (`--`) arguments — and will help identify any special keys/values expected by your app.
 
 The subsequent validation and handling, however, are left _entirely up to you_. Loop, match, and proceed however you see fit.
 
@@ -41,10 +41,10 @@ argyle = "0.9.*"
 
 A general setup might look something like the following.
 
-Refer to the documentation for `Argue` for more information, caveats, etc.
+Refer to the documentation for `Argue`, `KeyWord`, and `Argument` for more information, caveats, etc.
 
 ```rust
-use argyle::Argument;
+use argyle::{Argument, KeyWord};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
@@ -55,63 +55,47 @@ struct Settings {
     paths: Vec<PathBuf>,
 }
 
-fn main() {
-    let args = argyle::args()
-        .with_keys([
-            ("-h", false),        // Boolean flag.
-            ("--help", false),    // Boolean flag.
-            ("--threads", true),  // Expects a value.
-            ("--verbose", false), // Boolean flag.
-        ])
-        .unwrap(); // An error will only occur if a key
-                   // contains invalid characters.
+let args = argyle::args()
+    .with_keywords([
+        KeyWord::Key("-h"),          // Boolean flag (short).
+        KeyWord::Key("--help"),      // Boolean flag (long).
+        KeyWord::KeyWithValue("-j"), // Expects a value.
+        KeyWord::KeyWithValue("--threads"),
+    ]);
 
-    // If you aren't feeling the tuples, explicit switch/option
-    // methods can be used to accomplish the same thing:
-    let args = argyle::args()
-        .with_switches([
-            "-h",
-            "--help",
-            "--verbose",
-        ])
-        .unwrap()
-        .with_options(["--threads"])
-        .unwrap();
+// Loop and handle!
+let mut settings = Settings::default();
+for arg in args {
+    match arg {
+        // Help flag match.
+        Argument::Key("-h" | "--help") => {
+            println!("Help Screen Goes Here.");
+            return;
+        },
 
-    // Loop and handle!
-    let mut settings = Settings::default();
-    for arg in args {
-        match arg {
-            Argument::Key("-h" | "--help") => {
-                println!("Help Screen Goes Here.");
-                return;
-            },
-            Argument::Key("--verbose") => {
-                settings.verbose = true;
-            },
-            Argument::KeyWithValue("--threads", threads) => {
-                settings.threads = threads.parse()
-                    .expect("Threads must be a number!");
-            },
+        // Thread option match.
+        Argument::KeyWithValue("-j" | "--threads", value) => {
+            settings.threads = value.parse()
+                .expect("Maximum threads must be a number!");
+        },
 
-            // Something else… maybe you want to assume it's a path?
-            Argument::Other(v) => {
-                settings.paths.push(PathBuf::from(v));
-            },
-            
-            // Also something else, but not String-able. Paths don't care,
-            // though, so for this example maybe you just keep it?
-            Argument::InvalidUtf8(v) => {
-                settings.paths.push(PathBuf::from(v));
-            },
-            
-            // Nothing else is relevant here.
-            _ => {},
-        }
+        // Something else.
+        Argument::Other(v) => {
+            settings.paths.push(PathBuf::from(v));
+        },
+
+        // Also something else, but not String-able. PathBuf doesn't care
+        // about UTF-8, though, so it might be fine!
+        Argument::InvalidUtf8(v) => {
+            settings.paths.push(PathBuf::from(v));
+        },
+
+        // Nothing else is relevant here.
+        _ => {},
     }
-
-    // Do something with those settings…
 }
+
+// Now that you're set up, do stuff…
 ```
 
 
