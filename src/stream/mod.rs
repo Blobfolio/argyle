@@ -27,16 +27,13 @@ pub type ArgueEnv = Argue<Skip<ArgsOs>>;
 
 /// # Streaming Argument Iterator.
 ///
-/// `Argue` occupies the middle ground between [`std::env::args`] and full-service
-/// crates like `clap`.
+/// `Argue` occupies the middle ground between the standard library's barebones
+/// [`std::env::args_os`] helper and full-service crates like [clap](https://crates.io/crates/clap).
 ///
-/// It performs some basic normalization — and won't crash if an [`OsString`]
-/// contains invalid UTF-8! — and can help identify any reserved subcommands
-/// and keys expected by your app, but leaves any subsequent validation- and
-/// handling-related particulars _to you_.
-///
-/// That said, it does have a few _opinions_. Refer to [`KeyWord`] for
-/// formatting constraints.
+/// It performs some basic normalization — it handles string conversion in a
+/// non-panicking way, recognizes shorthand value assignments like `-kval`,
+/// `-k=val`, `--key=val`, and handles end-of-command (`--`) arguments — and
+/// will help identify any special keys/values expected by your app.
 ///
 /// `Argue` supports both combined and consecutive key/value association. For
 /// example, the following are equivalent:
@@ -47,14 +44,17 @@ pub type ArgueEnv = Argue<Skip<ArgsOs>>;
 /// instead collected and returned as-are in case you want to do anything with
 /// them. See [`Argument::End`] for more details.
 ///
+/// In general, `Argue` tries hard not to get in your way or make too many
+/// assumptions — handling and validation are left up to you! — but it does
+/// require that commands and keys follow certain basic formatting rules. Check
+/// out the [`KeyWord`] documentation for more details.
+///
 /// ## Examples
 ///
 /// ```
 /// use argyle::{Argument, KeyWord};
 ///
-/// // Most of the time you'll probably want to parse env args, which the
-/// // helper method [`args`] sets up. Add switches, options, etc, then loop to
-/// // see what all comes in!
+/// // To parse arguments from env, just use the `args` helper method.
 /// let args = argyle::args()
 ///     .with_keywords([
 ///         KeyWord::key("--version").unwrap(),

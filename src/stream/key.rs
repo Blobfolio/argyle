@@ -201,12 +201,14 @@ impl KeyWord {
 /// words.save(out_dir.join("keyz.rs"));
 /// ```
 ///
-/// Having done that, just `include!` it where needed:
+/// Having done that, just `include!` it within your library where needed:
 ///
 /// ```ignore
 /// let ags = argyle::args()
 ///     .with_keywords(include!(concat!(env!("OUT_DIR"), "/keyz.rs")));
 /// ```
+///
+/// For a real-world example, check out the build script for [adbyss](https://github.com/Blobfolio/adbyss/blob/master/adbyss/build.rs).
 pub struct KeyWordsBuilder(BTreeMap<String, String>);
 
 impl fmt::Display for KeyWordsBuilder {
@@ -235,6 +237,15 @@ impl KeyWordsBuilder {
 	/// # Is Empty?
 	///
 	/// Returns `true` if there are no keywords.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// // Duh.
+	/// assert!(KeyWordsBuilder::default().is_empty());
+	/// ```
 	pub fn is_empty(&self) -> bool { self.0.is_empty() }
 
 	#[inline]
@@ -242,6 +253,19 @@ impl KeyWordsBuilder {
 	/// # Length.
 	///
 	/// Returns the number of keywords currently in the set.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_keys([
+	///     "-h", "--help",
+	///     "-V", "--version",
+	/// ]);
+	/// assert_eq!(builder.len(), 4);
+	/// ```
 	pub fn len(&self) -> usize { self.0.len() }
 }
 
@@ -262,6 +286,15 @@ impl KeyWordsBuilder {
 	///
 	/// Use this to add a [`KeyWord::Command`] to the list.
 	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_command("make");
+	/// ```
+	///
 	/// ## Panics
 	///
 	/// This will panic if the command is invalid or repeated;
@@ -276,6 +309,19 @@ impl KeyWordsBuilder {
 	///
 	/// Use this to add one or more [`KeyWord::Command`] to the list.
 	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_commands([
+	///     "check",
+	///     "make",
+	///     "test",
+	/// ]);
+	/// ```
+	///
 	/// ## Panics
 	///
 	/// This will panic if any commands are invalid or repeated;
@@ -286,6 +332,15 @@ impl KeyWordsBuilder {
 	/// # Add a Boolean Key.
 	///
 	/// Use this to add a [`KeyWord::Key`] to the list.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_key("--help");
+	/// ```
 	///
 	/// ## Panics
 	///
@@ -301,6 +356,18 @@ impl KeyWordsBuilder {
 	///
 	/// Use this to add one or more [`KeyWord::Key`] to the list.
 	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_keys([
+	///     "-h", "--help",
+	///     "-V", "--version",
+	/// ]);
+	/// ```
+	///
 	/// ## Panics
 	///
 	/// This will panic if any keys are invalid or repeated.
@@ -311,6 +378,15 @@ impl KeyWordsBuilder {
 	/// # Add a Key that Expects a Value.
 	///
 	/// Use this to add a [`KeyWord::KeyWithValue`] to the list.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_key_with_value("--output");
+	/// ```
 	///
 	/// ## Panics
 	///
@@ -325,6 +401,18 @@ impl KeyWordsBuilder {
 	/// # Add Keys that Expect Values.
 	///
 	/// Use this to add one or more [`KeyWord::KeyWithValue`] to the list.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use argyle::KeyWordsBuilder;
+	///
+	/// let mut builder = KeyWordsBuilder::default();
+	/// builder.push_keys_with_values([
+	///     "-i", "--input",
+	///     "-o", "--output",
+	/// ]);
+	/// ```
 	///
 	/// ## Panics
 	///
