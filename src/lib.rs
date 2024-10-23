@@ -134,12 +134,16 @@ for arg in args {
 
 
 
-mod stream;
-pub use stream::{
+mod argue;
+mod key;
+
+pub use argue::{
 	args,
 	Argue,
 	ArgueEnv,
 	Argument,
+};
+pub use key::{
 	KeyWord,
 	KeyWordsBuilder,
 };

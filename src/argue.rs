@@ -2,12 +2,7 @@
 # Argyle: Streaming Argument Iterator.
 */
 
-mod key;
-
-pub use key::{
-	KeyWord,
-	KeyWordsBuilder,
-};
+use crate::KeyWord;
 use std::{
 	collections::BTreeSet,
 	env::ArgsOs,
