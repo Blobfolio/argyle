@@ -1,7 +1,7 @@
 [package]
 name = "argyle"
 version = "0.10.0"
-authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.81"
 description = "A lightweight, agnostic CLI argument parser."
@@ -25,6 +25,3 @@ default-target = "x86_64-unknown-linux-gnu"
 
 [package.metadata.bashman]
 name = "Argyle"
-bash-dir = "./"
-man-dir = "./"
-credits-dir = "./"
