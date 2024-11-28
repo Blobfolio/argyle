@@ -1,6 +1,6 @@
 # Project Dependencies
     Package:   argyle
-    Version:   0.10.0
-    Generated: 2024-10-17 19:06:19 UTC
+    Version:   0.10.1
+    Generated: 2024-11-28 18:44:05 UTC
 
-This package has no dependencies.
+This project has no dependencies.

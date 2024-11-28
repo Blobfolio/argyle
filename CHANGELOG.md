@@ -2,6 +2,15 @@
 
 
 
+## [0.10.1](https://github.com/Blobfolio/argyle/releases/tag/v0.10.1) - 2024-11-28
+
+### Changes
+
+* Miscellaneous code changes and lints
+* Miscellaneous doc changes
+
+
+
 ## [0.10.0](https://github.com/Blobfolio/argyle/releases/tag/v0.10.0) - 2024-10-17
 
 This release finishes the work of the last one. The streaming version of `Argue` is now stable and all there is; the old methods and structs have been removed.
