@@ -176,7 +176,14 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 			let mut next = match self.iter.next()?.into_string() {
 				Ok(next) => next,
 				// We can't do anything with OsString; return as is.
-				Err(e) => return Some(Argument::InvalidUtf8(e)),
+				Err(e) => {
+					#[cfg(feature = "try_paths")]
+					// Well, not _nothing_; maybe it's a path?
+					if matches!(std::fs::exists(&e), Ok(true)) {
+						return Some(Argument::Path(e));
+					}
+					return Some(Argument::InvalidUtf8(e));
+				},
 			};
 
 			// Empty values that aren't associated with a key are pointless.
@@ -229,6 +236,12 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 				});
 			}
 
+			#[cfg(feature = "try_paths")]
+			// Maybe it's a path?
+			if matches!(std::fs::exists(&next), Ok(true)) {
+				return Some(Argument::Path(OsString::from(next)));
+			}
+
 			// Whatever it was, it was something else!
 			return Some(Argument::Other(next));
 		}
@@ -263,6 +276,17 @@ pub enum Argument {
 	/// args like `--key=val` — so may or may not be _logically_ correct, but
 	/// that's CLI arguments in a nutshell. Haha.
 	KeyWithValue(&'static str, String),
+
+	#[cfg(feature = "try_paths")]
+	#[cfg_attr(docsrs, doc(cfg(feature = "try_paths")))]
+	/// # Path.
+	///
+	/// This is for unassociated-and-unrecognized arguments for which
+	/// [`std::fs::exists`] return `Ok(true)`.
+	///
+	/// All other such arguments will be yielded as [`Argument::Other`]
+	/// or [`Argument::InvalidUtf8`] instead.
+	Path(OsString),
 
 	/// # Everything Else.
 	///

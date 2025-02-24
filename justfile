@@ -42,6 +42,11 @@ doc_dir     := justfile_directory() + "/doc"
 		--release \
 		--target-dir "{{ cargo_dir }}"
 
+	cargo clippy \
+		--release \
+		--all-features \
+		--target-dir "{{ cargo_dir }}"
+
 
 # Generate CREDITS.
 @credits:
@@ -55,6 +60,7 @@ doc_dir     := justfile_directory() + "/doc"
 	cargo run \
 		-q \
 		--release \
+		--all-features \
 		--example "debug" \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
@@ -64,6 +70,7 @@ doc_dir     := justfile_directory() + "/doc"
 @doc:
 	cargo rustdoc \
 		--release \
+		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 	# Move the docs and clean up ownership.
