@@ -12,6 +12,7 @@
 
 * Bump Rust edition to 2024
 * Bump MSRV to `1.85`
+* Miscellaneous code cleanup and lints
 
 
 
