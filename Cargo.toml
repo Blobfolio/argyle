@@ -1,9 +1,9 @@
 [package]
 name = "argyle"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
-edition = "2021"
-rust-version = "1.81"
+edition = "2024"
+rust-version = "1.85"
 description = "A lightweight, agnostic CLI argument parser."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/argyle"
@@ -21,7 +21,15 @@ exclude = [
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
 rustdoc-args = ["--cfg", "docsrs"]
+features = [ "try_paths" ]
 default-target = "x86_64-unknown-linux-gnu"
 
 [package.metadata.bashman]
 name = "Argyle"
+
+[features]
+default = []
+
+# Expose Argument::Path variant, used for unassociated-and-unrecognized
+# arguments where std::fs::exists() == Ok(true).
+try_paths = []

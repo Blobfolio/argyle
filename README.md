@@ -29,6 +29,12 @@ argyle = "0.9.*"
 
 
 
+## Crate Features
+
+The non-default **`try_paths`** feature can be enabled to expose an additional `Argument::Path` variant, used for unassociated-and-unrecognized values for which `std::fs::exists() == Ok(true)`.
+
+
+
 ## Example
 
 A general setup might look something like the following.

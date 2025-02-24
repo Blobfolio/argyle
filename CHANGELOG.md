@@ -2,9 +2,23 @@
 
 
 
+## [0.11.0](https://github.com/Blobfolio/argyle/releases/tag/v0.11.0) - 2025-02-23
+
+### New
+
+* `Argument::Path` variant (via crate feature `try_paths`)
+
+### Changed
+
+* Bump Rust edition to 2024
+* Bump MSRV to `1.85`
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.10.1](https://github.com/Blobfolio/argyle/releases/tag/v0.10.1) - 2024-11-28
 
-### Changes
+### Changed
 
 * Miscellaneous code changes and lints
 * Miscellaneous doc changes

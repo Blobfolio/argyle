@@ -19,6 +19,12 @@ If that sounds terrible, just use [clap](https://crates.io/crates/clap) instead.
 
 
 
+## Crate Features
+
+The non-default **`try_paths`** feature can be enabled to expose an additional `Argument::Path` variant, used for unassociated-and-unrecognized values for which `std::fs::exists() == Ok(true)`.
+
+
+
 ## Example
 
 A general setup might look something like the following.
@@ -130,7 +136,7 @@ for arg in args {
 	unused_import_braces,
 )]
 
-#![expect(clippy::module_name_repetitions, reason = "Repetition is preferred.")]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 
 
