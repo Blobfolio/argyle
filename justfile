@@ -47,6 +47,11 @@ doc_dir     := justfile_directory() + "/doc"
 		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
+	# Flag builder tests.
+	cd "{{ justfile_dir() }}/examples/flags_builder" && cargo clippy \
+		--release \
+		--target-dir "{{ cargo_dir }}"
+
 
 # Generate CREDITS.
 @credits:
@@ -54,8 +59,8 @@ doc_dir     := justfile_directory() + "/doc"
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 
-# Build and Run Example.
-@debug +ARGS:
+# Build and Run Args Example.
+@debug-args +ARGS:
 	clear
 	cargo run \
 		-q \
@@ -64,6 +69,14 @@ doc_dir     := justfile_directory() + "/doc"
 		--example "debug" \
 		--target-dir "{{ cargo_dir }}" \
 		-- {{ ARGS }}
+
+
+# Build and Run Flags Example.
+@debug-flags:
+	clear
+	cd "{{ justfile_dir() }}/examples/flags_builder" && cargo run \
+		--release \
+		--target-dir "{{ cargo_dir }}"
 
 
 # Build Docs.
@@ -110,6 +123,11 @@ doc_dir     := justfile_directory() + "/doc"
 		--target-dir "{{ cargo_dir }}"
 
 	cargo test \
+		--release \
+		--target-dir "{{ cargo_dir }}"
+
+	# Flag builder tests.
+	cd "{{ justfile_dir() }}/examples/flags_builder" && cargo test \
 		--release \
 		--target-dir "{{ cargo_dir }}"
 
