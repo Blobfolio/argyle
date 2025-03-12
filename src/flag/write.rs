@@ -69,7 +69,8 @@ impl fmt::Display for FlagsWriter<'_> {
 		self.write_enum_def(f)?;
 		self.write_bitwise(f)?;
 		self.write_type_helpers(f)?;
-		self.write_self_helpers(f)?;
+		if self.is_full() { self.write_self_helpers_full(f)?; }
+		else { self.write_self_helpers(f)?; }
 		self.write_tests(f)
 	}
 }
@@ -187,6 +188,12 @@ impl<'a> FlagsWriter<'a> {
 			links,
 		}
 	}
+
+	/// # Is Full?
+	///
+	/// Returns true if there are eight primary flags defined, i.e. using up
+	/// an entire `u8`.
+	fn is_full(&self) -> bool { self.primary.len() == 8 }
 }
 
 /// # Write Helpers.
@@ -233,13 +240,19 @@ impl FlagsWriter<'_> {
 		// The last/largest value has all the bits.
 		let (_, all) = self.by_num.last_key_value().ok_or(fmt::Error)?;
 
+		// The from_u8 method returns an option if fewer than 256 variants,
+		// otherwise it just returns the thing.
+		let recover =
+			if self.is_full() { "" }
+			else { ".unwrap_or(Self::None)" };
+
 		writeln!(
 			f,
 			"impl ::std::ops::BitAnd for {name} {{
 	type Output = Self;
 	#[inline]
 	fn bitand(self, other: Self) -> Self::Output {{
-		Self::from_u8((self as u8) & (other as u8)).unwrap_or(Self::None)
+		Self::from_u8((self as u8) & (other as u8)){recover}
 	}}
 }}
 impl ::std::ops::BitAndAssign for {name} {{
@@ -259,7 +272,7 @@ impl ::std::ops::BitXor for {name} {{
 	type Output = Self;
 	#[inline]
 	fn bitxor(self, other: Self) -> Self::Output {{
-		Self::from_u8((self as u8) ^ (other as u8)).unwrap_or(Self::None)
+		Self::from_u8((self as u8) ^ (other as u8)){recover}
 	}}
 }}
 impl ::std::ops::BitXorAssign for {name} {{
@@ -271,7 +284,7 @@ impl ::std::ops::Not for {name} {{
 	#[inline]
 	fn not(self) -> Self::Output {{
 		let raw = ! (self as u8);
-		Self::from_u8(raw & (Self::{all} as u8)).unwrap_or(Self::None)
+		Self::from_u8(raw & (Self::{all} as u8)){recover}
 	}}
 }}",
 			name=self.name,
@@ -299,16 +312,31 @@ impl ::std::ops::Not for {name} {{
 		}
 
 		/// # Primitive To Self.
-		struct PrimitiveToSelf<'a>(&'a BTreeMap<u8, &'a str>);
+		struct PrimitiveToSelf<'a>(&'a BTreeMap<u8, &'a str>, bool);
 
 		impl fmt::Display for PrimitiveToSelf<'_> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				for (bits, name) in self.0 {
-					writeln!(f, "\t\t\t0b{} => Some(Self::{name}),", nice_bits(*bits))?;
+				// Infallible.
+				if self.1 {
+					for (bits, name) in self.0 {
+						writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
+					}
+				}
+				// Fallible.
+				else {
+					for (bits, name) in self.0 {
+						writeln!(f, "\t\t\t0b{} => Some(Self::{name}),", nice_bits(*bits))?;
+					}
 				}
 				Ok(())
 			}
 		}
+
+		// Are we full?
+		let full = self.is_full();
+		let (from_u8_return, from_u8_wild) =
+			if full { ("Self", "") }
+			else { ("Option<Self>", "\t\t\t_ => None,") };
 
 		// Write everything!
 		writeln!(
@@ -329,15 +357,15 @@ impl {name} {{
 	/// # (Try) From `u8`.
 	///
 	/// Find and return the flag corresponding to the `u8`, if any.
-	{scope}const fn from_u8(num: u8) -> Option<Self> {{
+	{scope}const fn from_u8(num: u8) -> {from_u8_return} {{
 		match num {{
-{}			_ => None,
+{}{from_u8_wild}
 		}}
 	}}
 }}",
 			self.primary.len(),
 			PrimaryList(self.primary.as_slice()),
-			PrimitiveToSelf(&self.by_num),
+			PrimitiveToSelf(&self.by_num, full),
 			name=self.name,
 			scope=self.scope,
 		)
@@ -410,6 +438,70 @@ impl {name} {{
 			rest
 		}}
 		else {{ Self::None }}
+	}}
+}}",
+			name=self.name,
+			scope=self.scope,
+		)
+	}
+
+	/// # Miscellaneous (Self) Helpers (Full).
+	///
+	/// Same as `write_self_helpers`, but when `from_u8` is infallible.
+	fn write_self_helpers_full(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		// Write everything!
+		writeln!(
+			f,
+			"#[allow(
+	clippy::allow_attributes,
+	dead_code,
+	reason = \"Automatically generated.\"
+)]
+impl {name} {{
+	#[must_use]
+	#[inline]
+	/// # Contains Flag?
+	///
+	/// Returns `true` if `self` is or comprises `other`, `false` if not.
+	{scope}const fn contains(self, other: Self) -> bool {{
+		(other as u8) == (self as u8) & (other as u8)
+	}}
+
+	#[must_use]
+	/// # Contains Any Part of Flag?
+	///
+	/// Returns the bits common to `self` and `other`, if any.
+	{scope}const fn contains_any(self, other: Self) -> Option<Self> {{
+		let any = Self::from_u8((self as u8) & (other as u8));
+		if any.is_none() {{ None }}
+		else {{ Some(any) }}
+	}}
+
+	#[must_use]
+	#[inline]
+	/// # Is None?
+	///
+	/// Returns `true` if no bits are set (i.e. [`{name}::None`]).
+	{scope}const fn is_none(self) -> bool {{ matches!(self, Self::None) }}
+
+	#[must_use]
+	/// # With Flag Bits.
+	///
+	/// Return the combination of `self` and `other`.
+	///
+	/// This is equivalent to `self | other`, but constant.
+	{scope}const fn with(self, other: Self) -> Self {{
+		Self::from_u8((self as u8) | (other as u8))
+	}}
+
+	#[must_use]
+	/// # Without Flag Bits.
+	///
+	/// Remove `other` from `self`, returning the difference.
+	///
+	/// This is equivalent to `self & ! other`, but constant.
+	{scope}const fn without(self, other: Self) -> Self {{
+		Self::from_u8((self as u8) & ! (other as u8))
 	}}
 }}",
 			name=self.name,
