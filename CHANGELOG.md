@@ -2,6 +2,14 @@
 
 
 
+## [0.12.1](https://github.com/Blobfolio/argyle/releases/tag/v0.12.1) - 2025-03-11
+
+### Fixed
+
+* Make `FlagsBuilder` enum `from_u8` infallible if full
+
+
+
 ## [0.12.0](https://github.com/Blobfolio/argyle/releases/tag/v0.12.0) - 2025-03-11
 
 ### New
