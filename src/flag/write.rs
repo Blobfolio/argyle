@@ -69,8 +69,7 @@ impl fmt::Display for FlagsWriter<'_> {
 		self.write_enum_def(f)?;
 		self.write_bitwise(f)?;
 		self.write_type_helpers(f)?;
-		if self.is_full() { self.write_self_helpers_full(f)?; }
-		else { self.write_self_helpers(f)?; }
+		self.write_self_helpers(f)?;
 		self.write_tests(f)
 	}
 }
@@ -189,11 +188,16 @@ impl<'a> FlagsWriter<'a> {
 		}
 	}
 
-	/// # Is Full?
+	#[expect(clippy::wrong_self_convention, reason = "Sorry about that.")]
+	/// # From U8 Method.
 	///
-	/// Returns true if there are eight primary flags defined, i.e. using up
-	/// an entire `u8`.
-	fn is_full(&self) -> bool { self.primary.len() == 8 }
+	/// Because the signature of the real `from_u8` varies based on enum
+	/// fullness, we may need to refer to the wrapper (that's added when it
+	/// isn't) in infallible contexts.
+	fn from_u8_method(&self) -> &'static str {
+		if self.primary.len() == 8 { "from_u8" }
+		else { "from_u8_or_none" }
+	}
 }
 
 /// # Write Helpers.
@@ -245,19 +249,13 @@ impl FlagsWriter<'_> {
 		// The last/largest value has all the bits.
 		let (_, all) = self.by_num.last_key_value().ok_or(fmt::Error)?;
 
-		// The from_u8 method returns an option if fewer than 256 variants,
-		// otherwise it just returns the thing.
-		let recover =
-			if self.is_full() { "" }
-			else { ".unwrap_or(Self::None)" };
-
 		writeln!(
 			f,
 			"impl ::std::ops::BitAnd for {name} {{
 	type Output = Self;
 	#[inline]
 	fn bitand(self, other: Self) -> Self::Output {{
-		Self::from_u8((self as u8) & (other as u8)){recover}
+		Self::{from_u8_method}((self as u8) & (other as u8))
 	}}
 }}
 impl ::std::ops::BitAndAssign for {name} {{
@@ -277,7 +275,7 @@ impl ::std::ops::BitXor for {name} {{
 	type Output = Self;
 	#[inline]
 	fn bitxor(self, other: Self) -> Self::Output {{
-		Self::from_u8((self as u8) ^ (other as u8)){recover}
+		Self::{from_u8_method}((self as u8) ^ (other as u8))
 	}}
 }}
 impl ::std::ops::BitXorAssign for {name} {{
@@ -289,10 +287,11 @@ impl ::std::ops::Not for {name} {{
 	#[inline]
 	fn not(self) -> Self::Output {{
 		let raw = ! (self as u8);
-		Self::from_u8(raw & (Self::{all} as u8)){recover}
+		Self::{from_u8_method}(raw & (Self::{all} as u8))
 	}}
 }}",
 			name=self.name,
+			from_u8_method=self.from_u8_method(),
 		)
 	}
 
@@ -300,10 +299,13 @@ impl ::std::ops::Not for {name} {{
 	///
 	/// Write the `FLAGS` constant and other top-level helpers.
 	fn write_type_helpers(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		/// # Primary Array Values.
-		struct PrimaryList<'a>(&'a [&'a str]);
+		/// # Primary Flag Array Values.
+		///
+		/// Print the values for the array, comma-separated, no terminating
+		/// line.
+		struct FlagsFmt<'a>(&'a [&'a str]);
 
-		impl fmt::Display for PrimaryList<'_> {
+		impl fmt::Display for FlagsFmt<'_> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				let mut iter = self.0.iter();
 				if let Some(next) = iter.next() {
@@ -316,32 +318,73 @@ impl ::std::ops::Not for {name} {{
 			}
 		}
 
-		/// # Primitive To Self.
-		struct PrimitiveToSelf<'a>(&'a BTreeMap<u8, &'a str>, bool);
+		/// # Writer: `Enum::from_u8`.
+		///
+		/// Write the entire `from_u8` method.
+		///
+		/// Note this will have one of two different signatures depending on the number
+		/// of flags: if all `u8` values are accounted for, it will be infallible,
+		/// returning `Self`; otherwise it will return `Option<Self>`.
+		struct FromU8Fmt<'a> {
+			/// # Variants (Number, Name).
+			by_num: &'a BTreeMap<u8, &'a str>,
 
-		impl fmt::Display for PrimitiveToSelf<'_> {
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				// Infallible.
-				if self.1 {
-					for (bits, name) in self.0 {
-						writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
-					}
-				}
-				// Fallible.
-				else {
-					for (bits, name) in self.0 {
-						writeln!(f, "\t\t\t0b{} => Some(Self::{name}),", nice_bits(*bits))?;
-					}
-				}
-				Ok(())
-			}
+			/// # Enum Scope.
+			scope: Scope,
 		}
 
-		// Are we full?
-		let full = self.is_full();
-		let (from_u8_return, from_u8_wild) =
-			if full { ("Self", "") }
-			else { ("Option<Self>", "\t\t\t_ => None,") };
+		impl fmt::Display for FromU8Fmt<'_> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				// It always starts the same way.
+				f.write_str("#[must_use]
+	/// # (Try) From `u8`.
+	///
+	/// Find and return the flag corresponding to the `u8`, if any.\n")?;
+
+				// If we're using the whole `u8`, it's infallible.
+				if self.by_num.len() == 256 {
+					writeln!(
+						f,
+						"{}const fn from_u8(num: u8) -> Self {{\n\t\tmatch num {{",
+						self.scope
+					)?;
+
+					for (bits, name) in self.by_num {
+						writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
+					}
+
+					// Close it out.
+					return f.write_str("\t\t}\n\t}\n");
+				}
+
+				// Otherwise the return type is Some/None.
+				writeln!(
+					f,
+					"{}const fn from_u8(num: u8) -> Option<Self> {{\n\t\tmatch num {{",
+					self.scope
+				)?;
+
+				for (bits, name) in self.by_num {
+					writeln!(f, "\t\t\t0b{} => Some(Self::{name}),", nice_bits(*bits))?;
+				}
+
+				// Finish it off, and create a private helper method to make
+				// it fallible with a zero fallback.
+				f.write_str("\t\t\t_ => None,
+		}
+	}
+
+	#[doc(hidden)]
+	#[inline]
+	/// # From `u8` (Fallback).
+	///
+	/// Same as `from_u8`, but returns `Self::None` if invalid.
+	const fn from_u8_or_none(num: u8) -> Self {
+		if let Some(good) = Self::from_u8(num) { good }
+		else { Self::None }
+	}\n")
+			}
+		}
 
 		// Write everything!
 		writeln!(
@@ -358,21 +401,16 @@ impl {name} {{
 		{}
 	];
 
-	#[must_use]
-	/// # (Try) From `u8`.
-	///
-	/// Find and return the flag corresponding to the `u8`, if any.
-	{scope}const fn from_u8(num: u8) -> {from_u8_return} {{
-		match num {{
-{}{from_u8_wild}
-		}}
-	}}
+	{from_u8}
 }}",
 			self.primary.len(),
-			PrimaryList(self.primary.as_slice()),
-			PrimitiveToSelf(&self.by_num, full),
+			FlagsFmt(self.primary.as_slice()),
 			name=self.name,
 			scope=self.scope,
+			from_u8=FromU8Fmt {
+				by_num: &self.by_num,
+				scope: self.scope
+			},
 		)
 	}
 
@@ -403,81 +441,7 @@ impl {name} {{
 	///
 	/// Returns the bits common to `self` and `other`, if any.
 	{scope}const fn contains_any(self, other: Self) -> Option<Self> {{
-		if let Some(any) = Self::from_u8((self as u8) & (other as u8)) {{
-			if any.is_none() {{ None }}
-			else {{ Some(any) }}
-		}}
-		else {{ None }}
-	}}
-
-	#[must_use]
-	#[inline]
-	/// # Is None?
-	///
-	/// Returns `true` if no bits are set (i.e. [`{name}::None`]).
-	{scope}const fn is_none(self) -> bool {{ matches!(self, Self::None) }}
-
-	#[must_use]
-	/// # With Flag Bits.
-	///
-	/// Return the combination of `self` and `other`.
-	///
-	/// This is equivalent to `self | other`, but constant.
-	{scope}const fn with(self, other: Self) -> Self {{
-		// This should never fail.
-		if let Some(both) = Self::from_u8((self as u8) | (other as u8)) {{
-			both
-		}}
-		else {{ Self::None }}
-	}}
-
-	#[must_use]
-	/// # Without Flag Bits.
-	///
-	/// Remove `other` from `self`, returning the difference.
-	///
-	/// This is equivalent to `self & ! other`, but constant.
-	{scope}const fn without(self, other: Self) -> Self {{
-		// This should never fail.
-		if let Some(rest) = Self::from_u8((self as u8) & ! (other as u8)) {{
-			rest
-		}}
-		else {{ Self::None }}
-	}}
-}}",
-			name=self.name,
-			scope=self.scope,
-		)
-	}
-
-	/// # Miscellaneous (Self) Helpers (Full).
-	///
-	/// Same as `write_self_helpers`, but when `from_u8` is infallible.
-	fn write_self_helpers_full(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		// Write everything!
-		writeln!(
-			f,
-			"#[allow(
-	clippy::allow_attributes,
-	dead_code,
-	reason = \"Automatically generated.\"
-)]
-impl {name} {{
-	#[must_use]
-	#[inline]
-	/// # Contains Flag?
-	///
-	/// Returns `true` if `self` is or comprises `other`, `false` if not.
-	{scope}const fn contains(self, other: Self) -> bool {{
-		(other as u8) == (self as u8) & (other as u8)
-	}}
-
-	#[must_use]
-	/// # Contains Any Part of Flag?
-	///
-	/// Returns the bits common to `self` and `other`, if any.
-	{scope}const fn contains_any(self, other: Self) -> Option<Self> {{
-		let any = Self::from_u8((self as u8) & (other as u8));
+		let any = Self::{from_u8_method}((self as u8) & (other as u8));
 		if any.is_none() {{ None }}
 		else {{ Some(any) }}
 	}}
@@ -496,7 +460,7 @@ impl {name} {{
 	///
 	/// This is equivalent to `self | other`, but constant.
 	{scope}const fn with(self, other: Self) -> Self {{
-		Self::from_u8((self as u8) | (other as u8))
+		Self::{from_u8_method}((self as u8) | (other as u8))
 	}}
 
 	#[must_use]
@@ -506,11 +470,12 @@ impl {name} {{
 	///
 	/// This is equivalent to `self & ! other`, but constant.
 	{scope}const fn without(self, other: Self) -> Self {{
-		Self::from_u8((self as u8) & ! (other as u8))
+		Self::{from_u8_method}((self as u8) & ! (other as u8))
 	}}
 }}",
 			name=self.name,
 			scope=self.scope,
+			from_u8_method=self.from_u8_method(),
 		)
 	}
 
@@ -518,6 +483,9 @@ impl {name} {{
 	/// # Write Tests.
 	fn write_tests(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		/// # Links.
+		///
+		/// Write the entire `t_links` test method, which we only need
+		/// conditionally.
 		struct Links<'a>(&'a str, &'a [(&'a str, &'a str)]);
 
 		impl fmt::Display for Links<'_> {
@@ -525,7 +493,7 @@ impl {name} {{
 				if self.1.is_empty() { return Ok(()); }
 
 				// Method opener.
-				f.write_str("\t#[test]
+				f.write_str("#[test]
 	/// # Test Complex Flag and Alias Links.
 	///
 	/// Ensure the variants referencing other variants actually do.
