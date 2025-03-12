@@ -24,7 +24,7 @@ Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-argyle = "0.9.*"
+argyle = "0.12.*"
 ```
 
 

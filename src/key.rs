@@ -500,7 +500,7 @@ mod test {
 
 	#[test]
 	fn t_valid_key() {
-		let first: BTreeSet<char> = ('0'..='9').into_iter()
+		let first: BTreeSet<char> = ('0'..='9')
 			.chain('a'..='z')
 			.chain('A'..='Z')
 			.collect();
@@ -521,7 +521,7 @@ mod test {
 
 		// Let's build up some keys to make sure we aren't missing anything
 		// in the match-based validation.
-		for a in first.iter().copied() {
+		for a in first.iter() {
 			// This should work for both long and short.
 			assert!(valid_key(format!("-{a}").as_bytes()));
 			assert!(valid_key(format!("--{a}").as_bytes()));
@@ -531,7 +531,7 @@ mod test {
 			assert!(! valid_key(format!("---{a}").as_bytes()));
 
 			// Longer variations.
-			for b in suffix.iter().copied() {
+			for b in suffix.iter() {
 				// This should work for long keys.
 				assert!(valid_key(format!("--{a}{b}").as_bytes()));
 
@@ -541,7 +541,7 @@ mod test {
 				assert!(! valid_key(format!("---{a}{b}").as_bytes()));
 
 				// Not with bad stuff though.
-				for c in bad.iter().copied() {
+				for c in bad.iter() {
 					assert!(! valid_key(format!("--{a}{c}{b}").as_bytes()));
 					assert!(! valid_key(format!("--{a}{b}{c}").as_bytes()));
 				}

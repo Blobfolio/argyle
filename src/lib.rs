@@ -141,6 +141,7 @@ for arg in args {
 
 
 mod argue;
+mod flag;
 mod key;
 
 pub use argue::{
@@ -149,6 +150,7 @@ pub use argue::{
 	ArgueEnv,
 	Argument,
 };
+pub use flag::FlagsBuilder;
 pub use key::{
 	KeyWord,
 	KeyWordsBuilder,

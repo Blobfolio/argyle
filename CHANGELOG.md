@@ -2,6 +2,18 @@
 
 
 
+## [0.12.0](https://github.com/Blobfolio/argyle/releases/tag/v0.12.0) - 2025-03-11
+
+### New
+
+* `FlagsBuilder`
+
+### Changed
+
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.11.0](https://github.com/Blobfolio/argyle/releases/tag/v0.11.0) - 2025-02-23
 
 ### New
