@@ -204,7 +204,12 @@ impl FlagsWriter<'_> {
 	fn write_enum_def(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		writeln!(
 			f,
-			"#[repr(u8)]
+			"#[allow(
+	clippy::allow_attributes,
+	clippy::manual_non_exhaustive,
+	reason = \"It is exhaustive!\"
+)]
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 #[doc = {:?}]
 {}enum {} {{",
