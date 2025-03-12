@@ -100,12 +100,13 @@ use std::{
 ///     ];
 ///
 ///     #[must_use]
-///     /// # (Try) From `u8`.
+///     /// # From `u8`.
 ///     ///
-///     /// Find and return the flag corresponding to the `u8`, if any.
-///     pub(crate) const fn from_u8(num: u8) -> Option<Self> {
+///     /// Find and return the flag corresponding to the `u8`. If out of range,
+///     /// `Self::None` is returned.
+///     pub(crate) const fn from_u8(num: u8) -> Self {
 ///         // …
-///         # None
+///         # Self::None
 ///     }
 /// }
 ///

@@ -187,17 +187,6 @@ impl<'a> FlagsWriter<'a> {
 			links,
 		}
 	}
-
-	#[expect(clippy::wrong_self_convention, reason = "Sorry about that.")]
-	/// # From U8 Method.
-	///
-	/// Because the signature of the real `from_u8` varies based on enum
-	/// fullness, we may need to refer to the wrapper (that's added when it
-	/// isn't) in infallible contexts.
-	fn from_u8_method(&self) -> &'static str {
-		if self.primary.len() == 8 { "from_u8" }
-		else { "from_u8_or_none" }
-	}
 }
 
 /// # Write Helpers.
@@ -255,7 +244,7 @@ impl FlagsWriter<'_> {
 	type Output = Self;
 	#[inline]
 	fn bitand(self, other: Self) -> Self::Output {{
-		Self::{from_u8_method}((self as u8) & (other as u8))
+		Self::from_u8((self as u8) & (other as u8))
 	}}
 }}
 impl ::std::ops::BitAndAssign for {name} {{
@@ -275,7 +264,7 @@ impl ::std::ops::BitXor for {name} {{
 	type Output = Self;
 	#[inline]
 	fn bitxor(self, other: Self) -> Self::Output {{
-		Self::{from_u8_method}((self as u8) ^ (other as u8))
+		Self::from_u8((self as u8) ^ (other as u8))
 	}}
 }}
 impl ::std::ops::BitXorAssign for {name} {{
@@ -287,11 +276,10 @@ impl ::std::ops::Not for {name} {{
 	#[inline]
 	fn not(self) -> Self::Output {{
 		let raw = ! (self as u8);
-		Self::{from_u8_method}(raw & (Self::{all} as u8))
+		Self::from_u8(raw & (Self::{all} as u8))
 	}}
 }}",
 			name=self.name,
-			from_u8_method=self.from_u8_method(),
 		)
 	}
 
@@ -320,69 +308,29 @@ impl ::std::ops::Not for {name} {{
 
 		/// # Writer: `Enum::from_u8`.
 		///
-		/// Write the entire `from_u8` method.
-		///
-		/// Note this will have one of two different signatures depending on the number
-		/// of flags: if all `u8` values are accounted for, it will be infallible,
-		/// returning `Self`; otherwise it will return `Option<Self>`.
-		struct FromU8Fmt<'a> {
-			/// # Variants (Number, Name).
-			by_num: &'a BTreeMap<u8, &'a str>,
-
-			/// # Enum Scope.
-			scope: Scope,
-		}
+		/// Write the match arms for the `from_u8` method.
+		struct FromU8Fmt<'a>(&'a BTreeMap<u8, &'a str>);
 
 		impl fmt::Display for FromU8Fmt<'_> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				// It always starts the same way.
-				f.write_str("#[must_use]
-	/// # (Try) From `u8`.
-	///
-	/// Find and return the flag corresponding to the `u8`, if any.\n")?;
-
-				// If we're using the whole `u8`, it's infallible.
-				if self.by_num.len() == 256 {
-					writeln!(
-						f,
-						"{}const fn from_u8(num: u8) -> Self {{\n\t\tmatch num {{",
-						self.scope
-					)?;
-
-					for (bits, name) in self.by_num {
-						writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
+				// Write the arms
+				let full = self.0.len() == 256;
+				for (bits, name) in self.0 {
+					if *bits == 0 {
+						if full {
+							f.write_str("\t\t\t0b0000_0000 => Self::None,\n")?;
+						}
+						continue;
 					}
-
-					// Close it out.
-					return f.write_str("\t\t}\n\t}\n");
+					writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
 				}
 
-				// Otherwise the return type is Some/None.
-				writeln!(
-					f,
-					"{}const fn from_u8(num: u8) -> Option<Self> {{\n\t\tmatch num {{",
-					self.scope
-				)?;
-
-				for (bits, name) in self.by_num {
-					writeln!(f, "\t\t\t0b{} => Some(Self::{name}),", nice_bits(*bits))?;
+				// Add a wildcard if we aren't full.
+				if ! full {
+					f.write_str("\t\t\t_ => Self::None,\n")?;
 				}
 
-				// Finish it off, and create a private helper method to make
-				// it fallible with a zero fallback.
-				f.write_str("\t\t\t_ => None,
-		}
-	}
-
-	#[doc(hidden)]
-	#[inline]
-	/// # From `u8` (Fallback).
-	///
-	/// Same as `from_u8`, but returns `Self::None` if invalid.
-	const fn from_u8_or_none(num: u8) -> Self {
-		if let Some(good) = Self::from_u8(num) { good }
-		else { Self::None }
-	}\n")
+				Ok(())
 			}
 		}
 
@@ -401,16 +349,21 @@ impl {name} {{
 		{}
 	];
 
-	{from_u8}
+	#[must_use]
+	/// # From `u8`.
+	///
+	/// Find and return the flag corresponding to the `u8`. If out of range,
+	/// `Self::None` is returned.
+	{scope}const fn from_u8(num: u8) -> Self {{
+		match num {{
+{arms}\t\t}}
+	}}
 }}",
 			self.primary.len(),
 			FlagsFmt(self.primary.as_slice()),
 			name=self.name,
 			scope=self.scope,
-			from_u8=FromU8Fmt {
-				by_num: &self.by_num,
-				scope: self.scope
-			},
+			arms=FromU8Fmt(&self.by_num),
 		)
 	}
 
@@ -441,7 +394,7 @@ impl {name} {{
 	///
 	/// Returns the bits common to `self` and `other`, if any.
 	{scope}const fn contains_any(self, other: Self) -> Option<Self> {{
-		let any = Self::{from_u8_method}((self as u8) & (other as u8));
+		let any = Self::from_u8((self as u8) & (other as u8));
 		if any.is_none() {{ None }}
 		else {{ Some(any) }}
 	}}
@@ -460,7 +413,7 @@ impl {name} {{
 	///
 	/// This is equivalent to `self | other`, but constant.
 	{scope}const fn with(self, other: Self) -> Self {{
-		Self::{from_u8_method}((self as u8) | (other as u8))
+		Self::from_u8((self as u8) | (other as u8))
 	}}
 
 	#[must_use]
@@ -470,52 +423,17 @@ impl {name} {{
 	///
 	/// This is equivalent to `self & ! other`, but constant.
 	{scope}const fn without(self, other: Self) -> Self {{
-		Self::{from_u8_method}((self as u8) & ! (other as u8))
+		Self::from_u8((self as u8) & ! (other as u8))
 	}}
 }}",
 			name=self.name,
 			scope=self.scope,
-			from_u8_method=self.from_u8_method(),
 		)
 	}
 
 	#[expect(clippy::literal_string_with_formatting_args, reason = "Sure does.")]
 	/// # Write Tests.
 	fn write_tests(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		/// # Links.
-		///
-		/// Write the entire `t_links` test method, which we only need
-		/// conditionally.
-		struct Links<'a>(&'a str, &'a [(&'a str, &'a str)]);
-
-		impl fmt::Display for Links<'_> {
-			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-				if self.1.is_empty() { return Ok(()); }
-
-				// Method opener.
-				f.write_str("#[test]
-	/// # Test Complex Flag and Alias Links.
-	///
-	/// Ensure the variants referencing other variants actually do.
-	fn t_links() {\n")?;
-
-				// Each condition.
-				for (lhs, rhs) in self.1 {
-					writeln!(
-						f,
-						"\t\tassert!(
-			{name}::{lhs}.contains({name}::{rhs}),
-			\"{name}::{lhs} does not contain {name}::{rhs}.\",
-		);",
-						name=self.0,
-					)?;
-				}
-
-				// Method closer.
-				f.write_str("\t}\n")
-			}
-		}
-
 		// The last/largest value has all the bits.
 		let (_, all) = self.by_num.last_key_value().ok_or(fmt::Error)?;
 
@@ -615,12 +533,55 @@ mod test_{snake} {{
 			snake=super::to_snake_case(self.name),
 			default_num=self.default,
 			default_var=self.by_num.get(&self.default).ok_or(fmt::Error)?,
-			links=Links(self.name, self.links.as_slice()),
+			links=TLinksFmt {
+				name: self.name,
+				links: self.links.as_slice(),
+			},
 		)
 	}
 }
 
 
+
+/// # Test Links.
+///
+/// Write the entire `t_links` test method, which we only need
+/// conditionally.
+struct TLinksFmt<'a> {
+	/// # Enum Name.
+	name: &'a str,
+
+	/// # Link Pairs.
+	links: &'a [(&'a str, &'a str)],
+}
+
+impl fmt::Display for TLinksFmt<'_> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		if self.links.is_empty() { return Ok(()); }
+
+		// Method opener.
+		f.write_str("#[test]
+	/// # Test Complex Flag and Alias Links.
+	///
+	/// Ensure the variants referencing other variants actually do.
+	fn t_links() {\n")?;
+
+		// Each condition.
+		for (lhs, rhs) in self.links {
+			writeln!(
+				f,
+				"\t\tassert!(
+			{name}::{lhs}.contains({name}::{rhs}),
+			\"{name}::{lhs} does not contain {name}::{rhs}.\",
+		);",
+				name=self.name,
+			)?;
+		}
+
+		// Method closer.
+		f.write_str("\t}")
+	}
+}
 
 /// # Build Named Bitflags.
 ///

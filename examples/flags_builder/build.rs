@@ -19,7 +19,7 @@ fn main() {
 		build3(),
 	];
 
-	let out = out.join("\n\n// -------------------------\n\n");
+	let out = out.join("\n\n\n");
 
 	File::create(out_path("flags.rs"))
 		.and_then(|mut f| f.write_all(out.as_bytes()).and_then(|()| f.flush()))
