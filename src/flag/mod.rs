@@ -100,12 +100,13 @@ use std::{
 ///     ];
 ///
 ///     #[must_use]
-///     /// # (Try) From `u8`.
+///     /// # From `u8`.
 ///     ///
-///     /// Find and return the flag corresponding to the `u8`, if any.
-///     pub(crate) const fn from_u8(num: u8) -> Option<Self> {
+///     /// Find and return the flag corresponding to the `u8`. If out of range,
+///     /// `Self::None` is returned.
+///     pub(crate) const fn from_u8(num: u8) -> Self {
 ///         // …
-///         # None
+///         # Self::None
 ///     }
 /// }
 ///
@@ -137,29 +138,50 @@ use std::{
 ///         # false
 ///     }
 ///
-///    #[must_use]
-///    /// # With Flag Bits.
-///    ///
-///    /// Return the combination of `self` and `other`.
-///    ///
-///    /// This is equivalent to `self | other`, but constant.
-///    pub(crate) const fn with(self, other: Self) -> Self {
-///        // …
-///        # Self::None
-///    }
+///     /// # Set Flag Bits.
+///     ///
+///     /// Add any missing bits from `other` to `self`.
+///     ///
+///     /// This is equivalent to `self |= other`, but constant.
+///     pub(crate) const fn set(&mut self, other: Self) {
+///         // …
+///     }
 ///
-///    #[must_use]
-///    /// # Without Flag Bits.
-///    ///
-///    /// Remove `other` from `self`, returning the difference.
-///    ///
-///    /// This is equivalent to `self & ! other`, but constant.
-///    pub(crate) const fn without(self, other: Self) -> Self {
-///        // …
-///        # Self::None
-///    }
+///     /// # Remove Flag Bits.
+///     ///
+///     /// Strip `other`'s bits from `self`.
+///     ///
+///     /// This is equivalent to `self &= ! other`, but constant.
+///     pub(crate) const fn unset(&mut self, other: Self) {
+///         // …
+///     }
+///
+///     #[must_use]
+///     /// # With Flag Bits.
+///     ///
+///     /// Return the combination of `self` and `other`.
+///     ///
+///     /// This is equivalent to `self | other`, but constant.
+///     pub(crate) const fn with(self, other: Self) -> Self {
+///         // …
+///         # Self::None
+///     }
+///
+///     #[must_use]
+///     /// # Without Flag Bits.
+///     ///
+///     /// Remove `other` from `self`, returning the difference.
+///     ///
+///     /// This is equivalent to `self & ! other`, but constant.
+///     pub(crate) const fn without(self, other: Self) -> Self {
+///         // …
+///         # Self::None
+///     }
 /// }
 /// ```
+///
+/// If you're having trouble visualizing it, clone the repository and check out
+/// the `flags_builder` example.
 pub struct FlagsBuilder {
 	/// # Enum Name.
 	name: String,

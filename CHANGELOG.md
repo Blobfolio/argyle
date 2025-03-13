@@ -2,6 +2,21 @@
 
 
 
+## [0.12.2](https://github.com/Blobfolio/argyle/releases/tag/v0.12.2) - 2025-03-12
+
+### Changed
+
+One more quick release to get the new `FlagsBuilder` tool to a stable place.
+
+* Add generated tests to CI;
+* Add more clippy overrides to generated code;
+* Expand unit testing;
+* New `flag_builder` example "crate";
+* New `set`/`unset` enum helpers;
+* Unify `from_u8` signatures across all generated enums (always return `Self`);
+
+
+
 ## [0.12.1](https://github.com/Blobfolio/argyle/releases/tag/v0.12.1) - 2025-03-11
 
 ### Fixed
