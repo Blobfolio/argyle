@@ -406,6 +406,22 @@ impl {name} {{
 	/// Returns `true` if no bits are set (i.e. [`{name}::None`]).
 	{scope}const fn is_none(self) -> bool {{ matches!(self, Self::None) }}
 
+	#[inline]
+	/// # Set Flag Bits.
+	///
+	/// Add any missing bits from `other` to `self`.
+	///
+	/// This is equivalent to `self |= other`, but constant.
+	{scope}const fn set(&mut self, other: Self) {{ *self = self.with(other); }}
+
+	#[inline]
+	/// # Remove Flag Bits.
+	///
+	/// Strip `other`'s bits from `self`.
+	///
+	/// This is equivalent to `self &= ! other`, but constant.
+	{scope}const fn unset(&mut self, other: Self) {{ *self = self.without(other); }}
+
 	#[must_use]
 	/// # With Flag Bits.
 	///
@@ -488,7 +504,15 @@ mod test_{snake} {{
 			if (a as u8).is_power_of_two() && (b as u8).is_power_of_two() {{
 				assert_eq!(a, ab & ! b, \"ab & ! b doesn't equal a?!\");
 				assert_eq!(b, ab & ! a, \"ab & ! a doesn't equal b?!\");
+				let mut ab2 = ab;
+				ab2.unset(b);
+				assert_eq!(ab2, a, \"Self::unset didn't work as expected.\");
 			}}
+
+			// Double-check set/unset work as expected.
+			let mut ab2 = a;
+			ab2.set(b);
+			assert_eq!(ab2, ab, \"Self::set != Self::with\");
 		}}
 	}}
 
