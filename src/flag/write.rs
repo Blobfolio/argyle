@@ -466,17 +466,8 @@ mod test_{snake} {{
 	///
 	/// Ensure flags can be added and subtracted from one another.
 	fn t_bitwise() {{
-		assert_eq!(
-			{name}::None,
-			! {name}::{all},
-			\"!{all} should be None!\",
-		);
-
-		assert_eq!(
-			{name}::{all},
-			! {name}::None,
-			\"!None should be {all}!\",
-		);
+		assert_eq!({name}::None, ! {name}::{all}, \"!{all} should be None!\");
+		assert_eq!({name}::{all}, ! {name}::None, \"!None should be {all}!\");
 
 		for pair in {name}::FLAGS.windows(2) {{
 			let a = pair[0];
@@ -495,18 +486,34 @@ mod test_{snake} {{
 
 			// For simple flags, confirm negation returns the status quo.
 			if (a as u8).is_power_of_two() && (b as u8).is_power_of_two() {{
-				assert_eq!(
-					a,
-					ab & ! b,
-					\"ab & ! b doesn't equal a?!\",
-				);
-				assert_eq!(
-					b,
-					ab & ! a,
-					\"ab & ! a doesn't equal b?!\",
-				);
+				assert_eq!(a, ab & ! b, \"ab & ! b doesn't equal a?!\");
+				assert_eq!(b, ab & ! a, \"ab & ! a doesn't equal b?!\");
 			}}
 		}}
+	}}
+
+	#[test]
+	/// # Test Conversions.
+	fn t_conversion() {{
+		let mut all = std::collections::BTreeSet::new();
+		let mut max = 0_u8;
+		for i in 0..=u8::MAX {{
+			let cur = {name}::from_u8(i);
+			if i == 0 || ! cur.is_none() {{
+				all.insert(i);
+				assert_eq!(cur as u8, i, \"{name}/u8 conversion failed for {{i}}\");
+				if max < i {{ max = i; }}
+			}}
+		}}
+
+		assert_eq!(max, {name}::{all} as u8, \"Max valid value not {name}::{all}…\");
+		assert_eq!(
+			all.len(),
+			usize::from(max) + 1,
+			\"Found {{}} elements instead of {{}}\",
+			all.len(),
+			usize::from(max) + 1,
+		);
 	}}
 
 	#[test]
