@@ -212,9 +212,9 @@ impl FlagsWriter<'_> {
 )?;
 
 		// Generate each arm.
-		for (name, bits) in &self.by_var {
+		for (&name, &bits) in &self.by_var {
 			// Add #[default]?
-			if *bits == self.default { f.write_str("\t#[default]\n")?; }
+			if bits == self.default { f.write_str("\t#[default]\n")?; }
 
 			// Named entries get docs.
 			if let Some(docs) = self.flag_docs.get(name) {
@@ -226,7 +226,7 @@ impl FlagsWriter<'_> {
 			}
 
 			// The actual arm!
-			writeln!(f, "\t{name} = 0b{},\n", nice_bits(*bits))?;
+			writeln!(f, "\t{name} = {},\n", NiceBits(bits))?;
 		}
 		f.write_str("}\n")
 	}
@@ -315,14 +315,14 @@ impl ::std::ops::Not for {name} {{
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				// Write the arms
 				let full = self.0.len() == 256;
-				for (bits, name) in self.0 {
-					if *bits == 0 {
+				for (&bits, &name) in self.0 {
+					if bits == 0 {
 						if full {
 							f.write_str("\t\t\t0b0000_0000 => Self::None,\n")?;
 						}
 						continue;
 					}
-					writeln!(f, "\t\t\t0b{} => Self::{name},", nice_bits(*bits))?;
+					writeln!(f, "\t\t\t{} => Self::{name},", NiceBits(bits))?;
 				}
 
 				// Add a wildcard if we aren't full.
@@ -574,6 +574,18 @@ mod test_{snake} {{
 
 
 
+/// # Nice Bits.
+///
+/// Print a `u8` in binary notation with a `_` in the middle.
+struct NiceBits(u8);
+
+impl fmt::Display for NiceBits {
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "0b{:04b}_{:04b}", self.0 >> 4, self.0 & 0b0000_1111)
+	}
+}
+
 /// # Test Links.
 ///
 /// Write the entire `t_links` test method, which we only need
@@ -762,13 +774,4 @@ fn named_flags(builder: &FlagsBuilder) -> BTreeMap<u8, &str> {
 
 	// We're done!
 	out2
-}
-
-/// # Format Binary Bits Nicely.
-///
-/// Return all eight bits as ASCII, with a `_` in the middle to appease clippy.
-fn nice_bits(num: u8) -> String {
-	let mut out = format!("{num:08b}");
-	out.insert(4, '_');
-	out
 }
