@@ -204,11 +204,11 @@ impl FlagsWriter<'_> {
 )]
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
-#[doc = {:?}]
-{}enum {} {{",
-			self.docs,
-			self.scope,
-			self.name,
+#[doc = {docs:?}]
+{scope}enum {name} {{",
+			docs=self.docs,
+			scope=self.scope,
+			name=self.name,
 )?;
 
 		// Generate each arm.
@@ -290,7 +290,7 @@ impl ::std::ops::Not for {name} {{
 		/// # Primary Flag Array Values.
 		///
 		/// Print the values for the array, comma-separated, no terminating
-		/// line.
+		/// line. (There won't ever be more than eight of them.)
 		struct FlagsFmt<'a>(&'a [&'a str]);
 
 		impl fmt::Display for FlagsFmt<'_> {
@@ -316,21 +316,22 @@ impl ::std::ops::Not for {name} {{
 				// Write the arms
 				let full = self.0.len() == 256;
 				for (&bits, &name) in self.0 {
+					// Only match zero if we're covering the full range.
 					if bits == 0 {
 						if full {
 							f.write_str("\t\t\t0b0000_0000 => Self::None,\n")?;
 						}
 						continue;
 					}
+
+					// Everything else is matched the usual way.
 					writeln!(f, "\t\t\t{} => Self::{name},", NiceBits(bits))?;
 				}
 
-				// Add a wildcard if we aren't full.
-				if ! full {
-					f.write_str("\t\t\t_ => Self::None,\n")?;
-				}
-
-				Ok(())
+				// Done?
+				if full { Ok(()) }
+				// Finish with a wildcard arm if we aren't full.
+				else { f.write_str("\t\t\t_ => Self::None,\n") }
 			}
 		}
 
@@ -345,8 +346,8 @@ impl ::std::ops::Not for {name} {{
 )]
 impl {name} {{
 	/// # (Primary) Flags.
-	{scope}const FLAGS: [Self; {}] = [
-		{}
+	{scope}const FLAGS: [Self; {flags_len}] = [
+		{flags}
 	];
 
 	#[must_use]
@@ -359,10 +360,10 @@ impl {name} {{
 {arms}\t\t}}
 	}}
 }}",
-			self.primary.len(),
-			FlagsFmt(self.primary.as_slice()),
 			name=self.name,
 			scope=self.scope,
+			flags_len=self.primary.len(),
+			flags=FlagsFmt(self.primary.as_slice()),
 			arms=FromU8Fmt(&self.by_num),
 		)
 	}
@@ -447,9 +448,47 @@ impl {name} {{
 		)
 	}
 
-	#[expect(clippy::literal_string_with_formatting_args, reason = "Sure does.")]
+	#[expect(
+		clippy::literal_string_with_formatting_args,
+		clippy::too_many_lines,
+		reason = "Sure does.",
+	)]
 	/// # Write Tests.
 	fn write_tests(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		/// # Test Contains/Links.
+		///
+		/// Explicitly test each complex flag/alias contains the flags they're supposed
+		/// to imply. (This is part of the `t_contains` unit test, but only applicable
+		/// if there are such variants.)
+		struct TContainsLinksFmt<'a> {
+			/// # Enum Name.
+			name: &'a str,
+
+			/// # Link Pairs.
+			links: &'a [(&'a str, &'a str)],
+		}
+
+		impl fmt::Display for TContainsLinksFmt<'_> {
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+				if self.links.is_empty() { return Ok(()); }
+
+				// Each condition.
+				f.write_str("\t\t// Test implied bits specifically.\n")?;
+				for (lhs, rhs) in self.links {
+					writeln!(
+						f,
+						"\t\tassert!(
+			{name}::{lhs}.contains({name}::{rhs}),
+			\"{name}::{lhs} should contain {name}::{rhs}.\",
+		);",
+						name=self.name,
+					)?;
+				}
+
+				Ok(())
+			}
+		}
+
 		// The last/largest value has all the bits.
 		let (_, all) = self.by_num.last_key_value().ok_or(fmt::Error)?;
 
@@ -546,6 +585,7 @@ mod test_{snake} {{
 	/// Ensure `{name}::None` contains none of the primary flags, and
 	/// `{name}::{all}` contains all of them.
 	fn t_contains() {{
+		// The no-bits flag should contain nothing; the all-bits everything.
 		for flag in {name}::FLAGS {{
 			assert!(
 				! {name}::None.contains(flag),
@@ -556,15 +596,14 @@ mod test_{snake} {{
 				\"{all} should contain {{flag:?}}.\",
 			);
 		}}
+{links}
 	}}
-
-	{links}
 }}",
 			name=self.name,
 			snake=super::to_snake_case(self.name),
 			default_num=self.default,
 			default_var=self.by_num.get(&self.default).ok_or(fmt::Error)?,
-			links=TLinksFmt {
+			links=TContainsLinksFmt {
 				name: self.name,
 				links: self.links.as_slice(),
 			},
@@ -576,7 +615,8 @@ mod test_{snake} {{
 
 /// # Nice Bits.
 ///
-/// Print a `u8` in binary notation with a `_` in the middle.
+/// Print a `u8` in binary notation with a `_` in the middle, like
+/// `0b0000_0000`.
 struct NiceBits(u8);
 
 impl fmt::Display for NiceBits {
@@ -586,45 +626,7 @@ impl fmt::Display for NiceBits {
 	}
 }
 
-/// # Test Links.
-///
-/// Write the entire `t_links` test method, which we only need
-/// conditionally.
-struct TLinksFmt<'a> {
-	/// # Enum Name.
-	name: &'a str,
 
-	/// # Link Pairs.
-	links: &'a [(&'a str, &'a str)],
-}
-
-impl fmt::Display for TLinksFmt<'_> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		if self.links.is_empty() { return Ok(()); }
-
-		// Method opener.
-		f.write_str("#[test]
-	/// # Test Complex Flag and Alias Links.
-	///
-	/// Ensure the variants referencing other variants actually do.
-	fn t_links() {\n")?;
-
-		// Each condition.
-		for (lhs, rhs) in self.links {
-			writeln!(
-				f,
-				"\t\tassert!(
-			{name}::{lhs}.contains({name}::{rhs}),
-			\"{name}::{lhs} does not contain {name}::{rhs}.\",
-		);",
-				name=self.name,
-			)?;
-		}
-
-		// Method closer.
-		f.write_str("\t}")
-	}
-}
 
 /// # Build Named Bitflags.
 ///
