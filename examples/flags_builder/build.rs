@@ -1,9 +1,9 @@
-/**
- * `FlagsBuilder` Build Tests.
- *
- * This generates several different flag sets so that their unit
- * tests/formatting can be properly tested.
- */
+/*!
+# `FlagsBuilder` Build Tests.
+
+This generates several different flag sets so that their unit tests/formatting
+can be properly tested.
+*/
 
 use argyle::FlagsBuilder;
 use std::{

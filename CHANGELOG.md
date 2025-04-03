@@ -2,6 +2,14 @@
 
 
 
+## [0.12.3](https://github.com/Blobfolio/argyle/releases/tag/v0.12.3) - 2025-04-03
+
+### Changed
+
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.12.2](https://github.com/Blobfolio/argyle/releases/tag/v0.12.2) - 2025-03-12
 
 ### Changed
