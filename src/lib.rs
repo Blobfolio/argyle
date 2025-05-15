@@ -136,6 +136,8 @@ for arg in args {
 	unused_import_braces,
 )]
 
+#![expect(clippy::unnecessary_debug_formatting, reason = "Clippy can't know this.")]
+
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 
