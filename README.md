@@ -22,7 +22,7 @@ If that sounds terrible, just use [clap](https://crates.io/crates/clap) instead.
 
 Add `argyle` to your `dependencies` in `Cargo.toml`, like:
 
-```
+```toml
 [dependencies]
 argyle = "0.12.*"
 ```
