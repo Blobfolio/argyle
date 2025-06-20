@@ -521,39 +521,60 @@ mod test {
 
 		// Let's build up some keys to make sure we aren't missing anything
 		// in the match-based validation.
-		for a in first.iter() {
+		let mut buf = String::new();
+		macro_rules! bufwrite {
+			($($expr:expr),+ $(,)?) => (
+				buf.truncate(0);
+				$( buf.push($expr); )+
+			);
+		}
+		for a in first.iter().copied() {
 			// This should work for both long and short.
-			assert!(valid_key(format!("-{a}").as_bytes()));
-			assert!(valid_key(format!("--{a}").as_bytes()));
+			bufwrite!('-', a);
+			assert!(valid_key(buf.as_bytes()));
+			bufwrite!('-', '-', a);
+			assert!(valid_key(buf.as_bytes()));
 
 			// But not with the wrong number of dashes.
-			assert!(! valid_key(format!("{a}").as_bytes()));
-			assert!(! valid_key(format!("---{a}").as_bytes()));
+			bufwrite!(a);
+			assert!(! valid_key(buf.as_bytes()));
+			bufwrite!('-', '-', '-', a);
+			assert!(! valid_key(buf.as_bytes()));
 
 			// Longer variations.
-			for b in suffix.iter() {
+			for b in suffix.iter().copied() {
 				// This should work for long keys.
-				assert!(valid_key(format!("--{a}{b}").as_bytes()));
+				bufwrite!('-', '-', a, b);
+				assert!(valid_key(buf.as_bytes()));
 
 				// But not any other dash count.
-				assert!(! valid_key(format!("{a}{b}").as_bytes()));
-				assert!(! valid_key(format!("-{a}{b}").as_bytes()));
-				assert!(! valid_key(format!("---{a}{b}").as_bytes()));
+				bufwrite!('-', '-', '-', a, b);
+				assert!(! valid_key(buf.as_bytes()));
+				bufwrite!('-', a, b);
+				assert!(! valid_key(buf.as_bytes()));
+				bufwrite!(a, b);
+				assert!(! valid_key(buf.as_bytes()));
 
 				// Not with bad stuff though.
-				for c in bad.iter() {
-					assert!(! valid_key(format!("--{a}{c}{b}").as_bytes()));
-					assert!(! valid_key(format!("--{a}{b}{c}").as_bytes()));
+				for c in bad.iter().copied() {
+					bufwrite!('-', '-', a, b, c);
+					assert!(! valid_key(buf.as_bytes()));
+					bufwrite!('-', '-', a, c, b);
+					assert!(! valid_key(buf.as_bytes()));
 				}
 			}
 		}
 
 		// Bad letters on their own should never work.
 		for c in bad {
-			assert!(! valid_key(format!("{c}").as_bytes()));
-			assert!(! valid_key(format!("-{c}").as_bytes()));
-			assert!(! valid_key(format!("--{c}").as_bytes()));
-			assert!(! valid_key(format!("---{c}").as_bytes()));
+			bufwrite!(c);
+			assert!(! valid_key(buf.as_bytes()));
+			bufwrite!('-', c);
+			assert!(! valid_key(buf.as_bytes()));
+			bufwrite!('-', '-', c);
+			assert!(! valid_key(buf.as_bytes()));
+			bufwrite!('-', '-', '-', c);
+			assert!(! valid_key(buf.as_bytes()));
 		}
 
 		// Bad starts should never work either.
