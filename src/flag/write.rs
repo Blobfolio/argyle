@@ -685,15 +685,13 @@ fn named_flags(builder: &FlagsBuilder) -> BTreeMap<u8, &str> {
 			// We can add some bits now and others later, provided they're
 			// not also TBD.
 			let mut extra = 0;
-			deps.retain(|v| {
-				if ! multi.contains(v) {
-					if let Some(bit) = out.get(v) {
-						extra |= bit;
-						return false;
-					}
+			deps.retain(|v|
+				if ! multi.contains(v) && let Some(bit) = out.get(v) {
+					extra |= bit;
+					false
 				}
-				true
-			});
+				else { true }
+			);
 
 			if extra == 0 { true }
 			else {

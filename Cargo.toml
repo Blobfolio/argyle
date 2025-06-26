@@ -1,9 +1,9 @@
 [package]
 name = "argyle"
-version = "0.12.3"
+version = "0.13.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "A lightweight, agnostic CLI argument parser."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/argyle"
