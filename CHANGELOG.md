@@ -2,6 +2,16 @@
 
 
 
+## [0.13.0](https://github.com/Blobfolio/argyle/releases/tag/v0.13.0) - 2025-06-26
+
+### Changed
+
+* Bump MSRV to `1.88`
+* Improved documentation
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.12.3](https://github.com/Blobfolio/argyle/releases/tag/v0.12.3) - 2025-04-03
 
 ### Changed
