@@ -2,6 +2,25 @@
 
 
 
+## [0.14.0](https://github.com/Blobfolio/argyle/releases/tag/v0.14.0) - 2025-09-20
+
+### New
+
+* `argue!` macro
+
+### Deprecated
+
+The new `argue!` macro will ultimately replace all the old CLI helpers, but for now, they've been deprecated to allow for a more peaceful transition.
+
+* `args`
+* `Argue`
+* `ArgueEnv`
+* `Argument`
+* `KeyWord`
+* `KeyWordBuilder`
+
+
+
 ## [0.13.0](https://github.com/Blobfolio/argyle/releases/tag/v0.13.0) - 2025-06-26
 
 ### Changed

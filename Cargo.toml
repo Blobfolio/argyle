@@ -30,6 +30,8 @@ name = "Argyle"
 [features]
 default = []
 
+# DEPRECATED: this feature will be removed along with Argue, et al.
+#
 # Expose Argument::Path variant, used for unassociated-and-unrecognized
 # arguments where std::fs::exists() == Ok(true).
 try_paths = []

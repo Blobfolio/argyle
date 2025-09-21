@@ -137,6 +137,7 @@ for arg in args {
 )]
 
 #![expect(clippy::unnecessary_debug_formatting, reason = "Clippy can't know this.")]
+#![expect(deprecated, reason = "They're *our* deprecations. Haha.")]
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -145,8 +146,9 @@ for arg in args {
 mod argue;
 mod flag;
 mod key;
-
 #[macro_use] mod macros;
+
+pub use flag::FlagsBuilder;
 
 pub use argue::{
 	args,
@@ -154,7 +156,6 @@ pub use argue::{
 	ArgueEnv,
 	Argument,
 };
-pub use flag::FlagsBuilder;
 pub use key::{
 	KeyWord,
 	KeyWordsBuilder,

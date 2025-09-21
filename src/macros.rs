@@ -5,7 +5,7 @@
 
 
 #[macro_export(local_inner_macros)]
-/// # Generate CLI Argument Enum and Parser/Iterator.
+/// # Generate a CLI Argument Enum and Parser/Iterator.
 ///
 /// This macro generates a custom enum and iterator to help with CLI argument
 /// parsing.

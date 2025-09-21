@@ -12,6 +12,10 @@ use std::{
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 #[derive(Debug, Clone, Copy)]
 /// # Keyword.
 ///
@@ -168,6 +172,10 @@ impl KeyWord {
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 #[derive(Debug, Default, Clone)]
 /// # Compile-Time [`KeyWord`]s Codegen.
 ///

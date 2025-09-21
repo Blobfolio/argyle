@@ -12,6 +12,10 @@ use std::{
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 /// # Alias for Env Args.
 ///
 /// This is the return type for [`args`]. It is kinda clunky so downstream
@@ -20,6 +24,10 @@ pub type ArgueEnv = Argue<Skip<ArgsOs>>;
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 /// # Streaming Argument Iterator.
 ///
 /// `Argue` occupies the middle ground between the standard library's barebones
@@ -250,6 +258,10 @@ impl<I: Iterator<Item=OsString>> Iterator for Argue<I> {
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// # Parsed Argument.
 ///
@@ -327,6 +339,10 @@ pub enum Argument {
 
 
 
+#[deprecated(
+	since = "0.14.0",
+	note="`Argue` and related have been superceded by the `argue!` macro.",
+)]
 #[must_use]
 /// # CLI Argument Iterator.
 ///
