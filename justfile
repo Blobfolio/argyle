@@ -59,18 +59,6 @@ doc_dir     := justfile_directory() + "/doc"
 	just _fix-chown "{{ justfile_directory() }}/CREDITS.md"
 
 
-# Build and Run Args Example.
-@debug-args +ARGS:
-	clear
-	cargo run \
-		-q \
-		--release \
-		--all-features \
-		--example "debug" \
-		--target-dir "{{ cargo_dir }}" \
-		-- {{ ARGS }}
-
-
 # Build and Run Flags Example.
 @debug-flags:
 	clear
