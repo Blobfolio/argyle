@@ -8,6 +8,10 @@
 
 * `argue!` macro
 
+### Changed
+
+* Bump MSRV to `1.90`
+
 ### Deprecated
 
 The new `argue!` macro will ultimately replace all the old CLI helpers, but for now, they've been deprecated to allow for a more peaceful transition.
