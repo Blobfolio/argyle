@@ -146,6 +146,8 @@ mod argue;
 mod flag;
 mod key;
 
+#[macro_use] mod macros;
+
 pub use argue::{
 	args,
 	Argue,
