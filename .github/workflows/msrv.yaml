@@ -50,4 +50,4 @@ jobs:
 
     - name: MSRV
       run: |
-        cargo msrv verify -- cargo check --all-features
+        cargo msrv verify -- cargo check

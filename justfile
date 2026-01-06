@@ -44,7 +44,6 @@ doc_dir     := justfile_directory() + "/doc"
 
 	cargo clippy \
 		--release \
-		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 	# Flag builder tests.
@@ -71,7 +70,6 @@ doc_dir     := justfile_directory() + "/doc"
 @doc:
 	cargo rustdoc \
 		--release \
-		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 	# Move the docs and clean up ownership.
@@ -86,13 +84,13 @@ doc_dir     := justfile_directory() + "/doc"
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
 
 	fyi task "Testing native/default target."
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
 
 	fyi task "Testing i686-unknown-linux-gnu (32-bit) target."
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features --target i686-unknown-linux-gnu
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --target i686-unknown-linux-gnu
 
 	fyi task "Testing mps64 (big endian) target."
-	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --all-features --target mips64-unknown-linux-gnuabi64
+	MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test --target mips64-unknown-linux-gnuabi64
 
 	# Post-clean.
 	[ ! -d "{{ justfile_directory() }}/target" ] || rm -rf "{{ justfile_directory() }}/target"
@@ -102,15 +100,6 @@ doc_dir     := justfile_directory() + "/doc"
 @test:
 	clear
 	cargo test \
-		--all-features \
-		--target-dir "{{ cargo_dir }}"
-
-	cargo test \
-		--target-dir "{{ cargo_dir }}"
-
-	cargo test \
-		--release \
-		--all-features \
 		--target-dir "{{ cargo_dir }}"
 
 	cargo test \
