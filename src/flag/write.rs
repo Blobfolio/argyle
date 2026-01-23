@@ -449,7 +449,6 @@ impl {name} {{
 	}
 
 	#[expect(
-		clippy::literal_string_with_formatting_args,
 		clippy::too_many_lines,
 		reason = "Sure does.",
 	)]
