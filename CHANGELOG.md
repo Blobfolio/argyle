@@ -2,7 +2,7 @@
 
 
 
-## [0.15.0](https://github.com/Blobfolio/argyle/releases/tag/v0.15.0) - TBD
+## [0.15.0](https://github.com/Blobfolio/argyle/releases/tag/v0.15.0) - 2026-01-22
 
 ### Removed
 
