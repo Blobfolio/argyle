@@ -105,6 +105,7 @@ fn main() {
 	clippy::format_push_string,
 	clippy::get_unwrap,
 	clippy::impl_trait_in_params,
+	clippy::implicit_clone,
 	clippy::lossy_float_literal,
 	clippy::missing_assert_message,
 	clippy::missing_docs_in_private_items,
@@ -114,7 +115,6 @@ fn main() {
 	clippy::rest_pat_in_fully_bound_structs,
 	clippy::semicolon_inside_block,
 	clippy::str_to_string,
-	clippy::string_to_string,
 	clippy::todo,
 	clippy::undocumented_unsafe_blocks,
 	clippy::unneeded_field_pattern,
@@ -133,26 +133,12 @@ fn main() {
 )]
 
 #![expect(clippy::unnecessary_debug_formatting, reason = "Clippy can't know this.")]
-#![expect(deprecated, reason = "They're *our* deprecations. Haha.")]
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 
 
-mod argue;
 mod flag;
-mod key;
 #[macro_use] mod macros;
 
 pub use flag::FlagsBuilder;
-
-pub use argue::{
-	args,
-	Argue,
-	ArgueEnv,
-	Argument,
-};
-pub use key::{
-	KeyWord,
-	KeyWordsBuilder,
-};
