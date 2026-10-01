@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.16.0](https://github.com/Blobfolio/argyle/releases/tag/v0.16.0) - 2026-10-01
+
+### Changed
+
+* Bump MSRV to `1.95`
+
 
 ## [0.15.0](https://github.com/Blobfolio/argyle/releases/tag/v0.15.0) - 2026-01-22
 
@@ -12,7 +18,6 @@
 * `Argument`
 * `KeyWord`
 * `KeyWordBuilder`
-
 
 
 ## [0.14.0](https://github.com/Blobfolio/argyle/releases/tag/v0.14.0) - 2025-09-20
@@ -37,7 +42,6 @@ The new `argue!` macro will ultimately replace all the old CLI helpers, but for 
 * `KeyWordBuilder`
 
 
-
 ## [0.13.0](https://github.com/Blobfolio/argyle/releases/tag/v0.13.0) - 2025-06-26
 
 ### Changed
@@ -47,13 +51,11 @@ The new `argue!` macro will ultimately replace all the old CLI helpers, but for 
 * Miscellaneous code cleanup and lints
 
 
-
 ## [0.12.3](https://github.com/Blobfolio/argyle/releases/tag/v0.12.3) - 2025-04-03
 
 ### Changed
 
 * Miscellaneous code cleanup and lints
-
 
 
 ## [0.12.2](https://github.com/Blobfolio/argyle/releases/tag/v0.12.2) - 2025-03-12
@@ -70,13 +72,11 @@ One more quick release to get the new `FlagsBuilder` tool to a stable place.
 * Unify `from_u8` signatures across all generated enums (always return `Self`);
 
 
-
 ## [0.12.1](https://github.com/Blobfolio/argyle/releases/tag/v0.12.1) - 2025-03-11
 
 ### Fixed
 
 * Make `FlagsBuilder` enum `from_u8` infallible if full
-
 
 
 ## [0.12.0](https://github.com/Blobfolio/argyle/releases/tag/v0.12.0) - 2025-03-11
@@ -88,7 +88,6 @@ One more quick release to get the new `FlagsBuilder` tool to a stable place.
 ### Changed
 
 * Miscellaneous code cleanup and lints
-
 
 
 ## [0.11.0](https://github.com/Blobfolio/argyle/releases/tag/v0.11.0) - 2025-02-23
@@ -104,7 +103,6 @@ One more quick release to get the new `FlagsBuilder` tool to a stable place.
 * Miscellaneous code cleanup and lints
 
 
-
 ## [0.10.1](https://github.com/Blobfolio/argyle/releases/tag/v0.10.1) - 2024-11-28
 
 ### Changed
@@ -113,13 +111,11 @@ One more quick release to get the new `FlagsBuilder` tool to a stable place.
 * Miscellaneous doc changes
 
 
-
 ## [0.10.0](https://github.com/Blobfolio/argyle/releases/tag/v0.10.0) - 2024-10-17
 
 This release finishes the work of the last one. The streaming version of `Argue` is now stable and all there is; the old methods and structs have been removed.
 
 Check out the [docs](https://docs.rs/argyle/latest/argyle/) to see how it all works!
-
 
 
 ## [0.9.0](https://github.com/Blobfolio/argyle/releases/tag/v0.9.0) - 2024-10-14
@@ -149,13 +145,11 @@ Old and new are both present in this release to ease the transition, but project
 * `argyle::KeyKind`
 
 
-
 ## [0.8.1](https://github.com/Blobfolio/argyle/releases/tag/v0.8.1) - 2024-09-05
 
 ### Changed
 
 * Minor code changes and lints
-
 
 
 ## [0.8.0](https://github.com/Blobfolio/argyle/releases/tag/v0.8.0) - 2024-08-08
@@ -165,7 +159,6 @@ Old and new are both present in this release to ease the transition, but project
 * `Argue::take_trailing`
 
 
-
 ## [0.7.2](https://github.com/Blobfolio/argyle/releases/tag/v0.7.2) - 2024-02-15
 
 ### New
@@ -173,13 +166,11 @@ Old and new are both present in this release to ease the transition, but project
 * `Argue::check_keys`
 
 
-
 ## [0.7.1](https://github.com/Blobfolio/argyle/releases/tag/v0.7.1) - 2024-02-08
 
 ### Changed
 
 * Minor code cleanup and lints
-
 
 
 ## [0.7.0](https://github.com/Blobfolio/argyle/releases/tag/v0.7.0) - 2024-01-20
@@ -198,7 +189,6 @@ Old and new are both present in this release to ease the transition, but project
 * `Argue::with_list` now buffers file reads (instead of reading everything in one go)
 
 
-
 ## [0.6.8](https://github.com/Blobfolio/argyle/releases/tag/v0.6.8) - 2023-06-01
 
 ### Changed
@@ -206,7 +196,6 @@ Old and new are both present in this release to ease the transition, but project
 * Bump dev dependencies
 * CI: test in debug and release modes
 * CI: test MSRV
-
 
 
 ## [0.6.7](https://github.com/Blobfolio/argyle/releases/tag/v0.6.7) - 2023-02-07
@@ -217,7 +206,6 @@ Old and new are both present in this release to ease the transition, but project
 * Rename `Argue::option2_iter_os` to `Argue::option2_values_os`
 
 
-
 ## [0.6.6](https://github.com/Blobfolio/argyle/releases/tag/v0.6.6) - 2023-02-04
 
 ### Changed
@@ -225,13 +213,11 @@ Old and new are both present in this release to ease the transition, but project
 * Improve docs.rs environment detection
 
 
-
 ## [0.6.5](https://github.com/Blobfolio/argyle/releases/tag/v0.6.5) - 2023-01-26
 
 ### Changed
 
 * Bump brunch `0.4`
-
 
 
 ## [0.6.4](https://github.com/Blobfolio/argyle/releases/tag/v0.6.4) - 2022-12-26
@@ -254,14 +240,12 @@ Old and new are both present in this release to ease the transition, but project
 * Updated ci badge syntax (docs).
 
 
-
 ## [0.6.3](https://github.com/Blobfolio/argyle/releases/tag/v0.6.3) - 2022-09-22
 
 ### Changed
 
 * Improved docs
 * Update (dev) dependencies
-
 
 
 ## [0.6.2](https://github.com/Blobfolio/argyle/releases/tag/v0.6.2) - 2022-08-12
@@ -274,13 +258,11 @@ Old and new are both present in this release to ease the transition, but project
 * `Argue::switch_by_prefix`
 
 
-
 ## [0.6.1](https://github.com/Blobfolio/argyle/releases/tag/v0.6.1) - 2022-08-11
 
 ### Changed
 
 * Bump MSRV 1.62
-
 
 
 ## [0.6.0](https://github.com/Blobfolio/argyle/releases/tag/v0.6.0) - 2022-05-30
@@ -299,13 +281,11 @@ Other changes to note:
 * `Argue::first_arg`, `Argue::first_arg_os` have been removed (use `Argue::arg(0)` instead)
 
 
-
 ## [0.5.6](https://github.com/Blobfolio/argyle/releases/tag/v0.5.6) - 2022-05-19
 
 ### Changed
 
 * Improved documentation
-
 
 
 ## [0.5.5](https://github.com/Blobfolio/argyle/releases/tag/v0.5.5) - 2022-04-19
@@ -320,7 +300,6 @@ Other changes to note:
 * `Argue::with_flags` (set flags during `Argue::new` instead)
 
 
-
 ## [0.5.4](https://github.com/Blobfolio/argyle/releases/tag/v0.5.4) - 2022-04-14
 
 ### Changed
@@ -329,7 +308,6 @@ Other changes to note:
 * Force `std::env::args_os` fallback for `miri`
 * Miscellaneous refactoring and code cleanup
 * Eliminate a few unnecessary allocations
-
 
 
 ## [0.5.3](https://github.com/Blobfolio/argyle/releases/tag/v0.5.3) - 2022-03-29
@@ -343,7 +321,6 @@ Other changes to note:
 * `Argue::option2_os`
 
 
-
 ## [0.5.2](https://github.com/Blobfolio/argyle/releases/tag/v0.5.2) - 2021-12-25
 
 ### New
@@ -355,14 +332,12 @@ Other changes to note:
 * Misc code cleanup.
 
 
-
 ## [0.5.1](https://github.com/Blobfolio/argyle/releases/tag/v0.5.1) - 2021-12-02
 
 ### Changed
 
 * Docs.
 * Fix justfile `credits` task.
-
 
 
 ## [0.5.0](https://github.com/Blobfolio/argyle/releases/tag/v0.5.0) - 2021-10-21
